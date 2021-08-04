@@ -73,9 +73,9 @@ case "$AUTOBUILD_PLATFORM" in
 
                 mkdir -p "$stage/include/sentry"
                 mv Headers/* $stage/include/sentry/
-                rm -r Headers PrivateHeaders
+                rm -r Headers PrivateHeaders Modules
                 pushd "Versions/A/"
-                    rm -r Headers PrivateHeaders
+                    rm -r Headers PrivateHeaders Modules
                 popd
             popd
             cp -a Carthage/Build/Mac/* $stage/lib/release/
