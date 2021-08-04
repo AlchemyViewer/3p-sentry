@@ -1,0 +1,10 @@
+include:
+  - project: 'alchemy/infrastructure/gitlab-ci-config'
+    file: '3p-library.yml'
+
+variables:
+  BUILD_COMMON: 0
+  BUILD_WINDOWS: 0
+  BUILD_WINDOWS64: 0
+  BUILD_LINUX64: 0
+  BUILD_MACOS: 1

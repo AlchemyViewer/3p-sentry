@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+
+cd "$(dirname "$0")"
+
+# turn on verbose debugging output for logs.
+exec 4>&1; export BASH_XTRACEFD=4; set -x
+# make errors fatal
+set -e
+# bleat on references to undefined shell variables
+set -u
+
+NATIVE_SOURCE_DIR="sentry-native"
+COCOA_SOURCE_DIR="sentry-cocoa"
+
+top="$(pwd)"
+stage="$top"/stage
+
+# load autobuild provided shell functions and variables
+case "$AUTOBUILD_PLATFORM" in
+    windows*)
+        autobuild="$(cygpath -u "$AUTOBUILD")"
+    ;;
+    *)
+        autobuild="$AUTOBUILD"
+    ;;
+esac
+source_environment_tempfile="$stage/source_environment.sh"
+"$autobuild" source_environment > "$source_environment_tempfile"
+. "$source_environment_tempfile"
+
+version="1.0.0"
+echo "${version}" > "${stage}/VERSION.txt"
+
+case "$AUTOBUILD_PLATFORM" in
+    # ------------------------ windows, windows64 ------------------------
+    windows*)
+        pushd "$NATIVE_SOURCE_DIR"
+            load_vsvars
+
+            mkdir -p "build_release"
+            pushd "build_release"
+                # Invoke cmake and use as official build
+                cmake -G "$AUTOBUILD_WIN_CMAKE_GEN" -A "$AUTOBUILD_WIN_VSPLATFORM" -T host="$AUTOBUILD_WIN_VSHOST" .. \
+                    #-DBUILD_SHARED_LIBS=OFF \
+                    -DCMAKE_CXX_STANDARD=17 \
+                    -DCMAKE_INSTALL_PREFIX=$(cygpath -w "$stage/sentry/release")
+
+                cmake --build . --config RelWithDebInfo
+
+                # conditionally run unit tests
+                if [ "${DISABLE_UNIT_TESTS:-0}" = "0" ]; then
+                    ctest -C RelWithDebInfo
+                fi
+
+                cmake --install . --config RelWithDebInfo
+            popd
+        popd
+    ;;
+
+    # ------------------------- darwin, darwin64 -------------------------
+    darwin*)
+        pushd "$COCOA_SOURCE_DIR"
+            # Setup osx sdk platform
+            SDKNAME="macosx"
+            export SDKROOT=$(xcodebuild -version -sdk ${SDKNAME} Path)
+            export MACOSX_DEPLOYMENT_TARGET=10.13
+
+            carthage build --archive --platform macOS
+        popd
+    ;;            
+
+    # -------------------------- linux, linux64 --------------------------
+    linux*)
+        pushd "$NATIVE_SOURCE_DIR"
+            # Linux build environment at Linden comes pre-polluted with stuff that can
+            # seriously damage 3rd-party builds.  Environmental garbage you can expect
+            # includes:
+            #
+            #    DISTCC_POTENTIAL_HOSTS     arch           root        CXXFLAGS
+            #    DISTCC_LOCATION            top            branch      CC
+            #    DISTCC_HOSTS               build_name     suffix      CXX
+            #    LSDISTCC_ARGS              repo           prefix      CFLAGS
+            #    cxx_version                AUTOBUILD      SIGN        CPPFLAGS
+            #
+            # So, clear out bits that shouldn't affect our configure-directed build
+            # but which do nonetheless.
+            #
+            unset DISTCC_HOSTS CFLAGS CPPFLAGS CXXFLAGS
+
+            # Default target per autobuild build --address-size
+            opts="${TARGET_OPTS:--m$AUTOBUILD_ADDRSIZE}"
+            # Use simple flags for crash reporter
+            DEBUG_COMMON_FLAGS="$opts -Og -g -fPIC -DPIC"
+            RELEASE_COMMON_FLAGS="$opts -O2 -g -fPIC -DPIC -fstack-protector-strong -D_FORTIFY_SOURCE=2"
+            DEBUG_CFLAGS="$DEBUG_COMMON_FLAGS"
+            RELEASE_CFLAGS="$RELEASE_COMMON_FLAGS"
+            DEBUG_CXXFLAGS="$DEBUG_COMMON_FLAGS -std=c++17"
+            RELEASE_CXXFLAGS="$RELEASE_COMMON_FLAGS -std=c++17"
+            DEBUG_CPPFLAGS="-DPIC"
+            RELEASE_CPPFLAGS="-DPIC -D_FORTIFY_SOURCE=2"
+
+            # Handle any deliberate platform targeting
+            if [ -z "${TARGET_CPPFLAGS:-}" ]; then
+                # Remove sysroot contamination from build environment
+                unset CPPFLAGS
+            else
+                # Incorporate special pre-processing flags
+                export CPPFLAGS="$TARGET_CPPFLAGS"
+            fi
+
+            # Release
+            mkdir -p "build_release"
+            pushd "build_release"
+                cmake ../ -G"Ninja" \
+                    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+                    #-DBUILD_SHARED_LIBS:BOOL=OFF \
+                    -DCMAKE_CXX_STANDARD=17 \
+                    -DCMAKE_C_FLAGS="$RELEASE_CFLAGS" \
+                    -DCMAKE_CXX_FLAGS="$RELEASE_CXXFLAGS" \
+                    -DCMAKE_INSTALL_PREFIX="$stage/sentry/release"
+
+                cmake --build . --config RelWithDebInfo --parallel $AUTOBUILD_CPU_COUNT
+
+                # conditionally run unit tests
+                if [ "${DISABLE_UNIT_TESTS:-0}" = "0" ]; then
+                    ctest -C RelWithDebInfo
+                fi
+
+                cmake --install . --config RelWithDebInfo
+            popd
+        popd
+    ;;
+esac
+mkdir -p "$stage/LICENSES"
+cp $NATIVE_SOURCE_DIR/LICENSE "$stage/LICENSES/sentry.txt"
