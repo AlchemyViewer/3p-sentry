@@ -35,25 +35,27 @@ case "$AUTOBUILD_PLATFORM" in
     # ------------------------ windows, windows64 ------------------------
     windows*)
         pushd "$NATIVE_SOURCE_DIR"
-            load_vsvars
-
             mkdir -p "build_release"
             pushd "build_release"
                 # Invoke cmake and use as official build
                 cmake -G "$AUTOBUILD_WIN_CMAKE_GEN" -A "$AUTOBUILD_WIN_VSPLATFORM" -T host="$AUTOBUILD_WIN_VSHOST" .. \
-                    #-DBUILD_SHARED_LIBS=OFF \
                     -DCMAKE_CXX_STANDARD=17 \
-                    -DCMAKE_INSTALL_PREFIX=$(cygpath -w "$stage/sentry/release")
+                    -DCMAKE_INSTALL_PREFIX=$(cygpath -w "$stage/sentry")
 
                 cmake --build . --config RelWithDebInfo
-
-                # conditionally run unit tests
-                if [ "${DISABLE_UNIT_TESTS:-0}" = "0" ]; then
-                    ctest -C RelWithDebInfo
-                fi
-
                 cmake --install . --config RelWithDebInfo
             popd
+        popd
+
+        pushd "$stage/sentry"
+            mkdir -p "$stage/include/sentry"
+            mkdir -p "$stage/bin/release"
+            mkdir -p "$stage/lib/release"
+
+            cp -a bin/crashpad_handler.* "$stage/bin/release"
+            cp -a bin/sentry.* "$stage/lib/release"
+            cp -a lib/*.lib "$stage/lib/release"
+            cp -a include/* "$stage/include/sentry"
         popd
     ;;
 
