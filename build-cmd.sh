@@ -66,6 +66,19 @@ case "$AUTOBUILD_PLATFORM" in
             export MACOSX_DEPLOYMENT_TARGET=10.13
 
             carthage build --archive --platform macOS
+
+            mkdir -p "$stage/lib/release"
+
+            pushd "Carthage/Build/Mac/Sentry.framework"
+
+                mkdir -p "$stage/include/sentry"
+                mv Headers/* $stage/include/sentry/
+                rm -r Headers PrivateHeaders
+                pushd "Versions/A/"
+                    rm -r Headers PrivateHeaders
+                popd
+            popd
+            cp -a Carthage/Build/Mac/* $stage/lib/release/
         popd
     ;;            
 
