@@ -1,0 +1,119 @@
+name: Build & Test
+on:
+  push:
+    branches:
+      - master
+      - release/**
+  pull_request:
+
+jobs:
+  unit-tests:
+    name: Unit Tests ${{matrix.name}}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        
+        include:
+          # SentrySystemEventsBreadcrumbsTest only run on Catalyst and iOS
+          # so the coverage report shows a reduced coverage.
+          - name: macOS
+            destination: platform=macOS
+            pushCodecov: false
+          - name: Mac Catalyst
+            destination: platform=macOS,variant=Mac Catalyst  
+            pushCodecov: true
+          - name: iOS  
+            destination: platform=iOS Simulator,OS=latest,name=iPhone 11 Pro
+            pushCodecov: true
+          - name: tvOS  
+            destination: platform=tvOS Simulator,OS=latest,name=Apple TV 4K
+            pushCodecov: false    
+          # Can't run tests on watchOS because XCTest is not available  
+
+    steps:
+      - uses: actions/checkout@v2
+      - run: ./scripts/ci-select-xcode.sh
+      - name: Running tests
+        run: >-
+          xcodebuild 
+          -workspace Sentry.xcworkspace 
+          -scheme Sentry 
+          -configuration Release 
+          GCC_GENERATE_TEST_COVERAGE_FILES=YES 
+          -destination "${{matrix.destination}}" 
+          test | xcpretty -t && exit ${PIPESTATUS[0]}
+
+      # We can upload all coverage reports, because codecov merges them.
+      # See https://docs.codecov.io/docs/merging-reports
+      # Checkout .codecov.yml to see the config of Codecov
+      - name: Push code coverage to codecov
+        uses: codecov/codecov-action@v1
+        if: ${{matrix.pushCodecov}}
+
+  build-sample:
+    name: Sample ${{ matrix.scheme }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        beforeXcode: ['']
+        scheme: 
+          - iOS-Swift
+          - iOS-ObjectiveC
+          - macOS-Swift
+          - tvOS-Swift
+
+        # WatchOS needs Sentry as a XCFramework  
+        include:
+          - scheme: watchOS-Swift WatchKit App
+            beforeXcode: 'make build-for-watchos'
+
+    steps:
+      - uses: actions/checkout@v2
+      - run: ./scripts/ci-select-xcode.sh
+      - run: ${{matrix.beforeXcode}}
+      
+      # Disable code signing. We just want to make sure these compile.
+      - run: >-
+          xcodebuild
+          -workspace Sentry.xcworkspace
+          -scheme '${{matrix.scheme}}'
+          -configuration Debug
+          CODE_SIGNING_ALLOWED="NO"
+          build
+
+  validate-podspec:
+    name: Validate Podspec
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Validate Podspec
+        run: pod lib lint
+        shell: sh
+
+  build-carthage:
+    name: Build Carthage
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: make build-carthage
+        shell: sh 
+
+      - name: Archiving Sentry.Framework.zip
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ github.sha }}
+          path: |
+            ${{ github.workspace }}/*.zip
+          
+  validate-spm:
+    name: Validate Swift Package Manager
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set SPM revision to current git commit
+        run: sed -i '' 's/.branch("master")/.revision("${{ github.sha }}")/g' Samples/macOS-SPM-CommandLine/Package.swift
+      - run: swift build
+        working-directory: Samples/macOS-SPM-CommandLine
+        shell: sh
