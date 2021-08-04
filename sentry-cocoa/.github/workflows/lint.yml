@@ -1,0 +1,12 @@
+name: lint
+on:
+  pull_request:
+
+jobs:
+  swift-lint:
+    name: Swift Lint
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run SwiftLint
+        run: swiftlint
