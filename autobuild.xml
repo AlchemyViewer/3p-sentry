@@ -1,6 +1,150 @@
 <?xml version="1.0" ?>
 <llsd>
 <map>
+    <key>installables</key>
+    <map>
+      <key>curl</key>
+      <map>
+        <key>canonical_repo</key>
+        <string>https://git.alchemyviewer.org/alchemy/thirdparty/3p-curl</string>
+        <key>copyright</key>
+        <string>Copyright (c) 1996 - 2017, Daniel Stenberg, (daniel@haxx.se), and many contributors</string>
+        <key>description</key>
+        <string>Library for transferring data specified with URL syntax</string>
+        <key>license</key>
+        <string>curl</string>
+        <key>license_file</key>
+        <string>LICENSES/curl.txt</string>
+        <key>name</key>
+        <string>curl</string>
+        <key>platforms</key>
+        <map>
+          <key>linux64</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>4263b1878d144746af48f2e82f877fc6ca23acc051963697d79e640fccb1e1332a8fbbcc9a3fbe21fda93d70386418b7</string>
+              <key>hash_algorithm</key>
+              <string>sha3_384</string>
+              <key>url</key>
+              <string>https://git.alchemyviewer.org/api/v4/projects/89/packages/generic/curl-950/7.54.1/curl-7.54.1-linux64-950.tar.xz</string>
+            </map>
+            <key>name</key>
+            <string>linux64</string>
+          </map>
+        </map>
+        <key>source_type</key>
+        <string>hg</string>
+        <key>version</key>
+        <string>7.54.1</string>
+      </map>
+      <key>nghttp2</key>
+      <map>
+        <key>canonical_repo</key>
+        <string>https://bitbucket.org/lindenlab/3p-nghttp2</string>
+        <key>copyright</key>
+        <string>Copyright (c) 2012, 2014, 2015, 2016 Tatsuhiro Tsujikawa
+Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
+        <key>description</key>
+        <string>Library providing HTTP 2 support for libcurl</string>
+        <key>license</key>
+        <string>MIT</string>
+        <key>license_file</key>
+        <string>LICENSES/nghttp2.txt</string>
+        <key>name</key>
+        <string>nghttp2</string>
+        <key>platforms</key>
+        <map>
+          <key>linux64</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>d12710dab548fa2a6f894bbb6190cc4bca17a424c0d64ab70ffde3f0c789ea1c62822d5c10795507e86200615b33438b</string>
+              <key>hash_algorithm</key>
+              <string>sha3_384</string>
+              <key>url</key>
+              <string>https://git.alchemyviewer.org/api/v4/projects/91/packages/generic/nghttp2-946/1.44.0/nghttp2-1.44.0-linux64-946.tar.xz</string>
+            </map>
+            <key>name</key>
+            <string>linux64</string>
+          </map>
+        </map>
+        <key>source_type</key>
+        <string>hg</string>
+        <key>version</key>
+        <string>1.44.0</string>
+      </map>
+      <key>openssl</key>
+      <map>
+        <key>canonical_repo</key>
+        <string>https://git.alchemyviewer.org/alchemy/thirdparty/3p-openssl</string>
+        <key>copyright</key>
+        <string>Copyright (c) 1998-2021 The OpenSSL Project.  All rights reserved; Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)</string>
+        <key>description</key>
+        <string>Secure Sockets Layer (SSL v2/v3) and Transport Layer Security (TLS v1) Library</string>
+        <key>license</key>
+        <string>openssl</string>
+        <key>license_file</key>
+        <string>LICENSES/openssl.txt</string>
+        <key>name</key>
+        <string>openssl</string>
+        <key>platforms</key>
+        <map>
+          <key>linux64</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>a716d9c116b09aedd33e6f45904fd11d4b6c22a03a54aa4a06207f03804cd2467e8929a61cd8bc36cc563c894ae0c859</string>
+              <key>hash_algorithm</key>
+              <string>sha3_384</string>
+              <key>url</key>
+              <string>https://git.alchemyviewer.org/api/v4/projects/90/packages/generic/openssl-942/0.0.942/openssl-1.0.2u.942-linux64-942.tar.xz</string>
+            </map>
+            <key>name</key>
+            <string>linux64</string>
+          </map>
+        </map>
+        <key>version</key>
+        <string>1.0.2u.942</string>
+      </map>
+      <key>zlib-ng</key>
+      <map>
+        <key>canonical_repo</key>
+        <string>https://git.alchemyviewer.org/alchemy/thirdparty/3p-zlib-ng</string>
+        <key>copyright</key>
+        <string>Copyright (C) 1995-2017 Jean-loup Gailly and Mark Adler</string>
+        <key>description</key>
+        <string>zlib replacement with optimizations for next generation systems.</string>
+        <key>license</key>
+        <string>zlib</string>
+        <key>license_file</key>
+        <string>LICENSES/zlib-ng.txt</string>
+        <key>name</key>
+        <string>zlib-ng</string>
+        <key>platforms</key>
+        <map>
+          <key>linux64</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>d36bb0b73f0bb5dac0444f8ac56ae90bb6d6501e440d98ffb0773a12fc044d132be982d4ccf427ff5c5569fabf2d58d8</string>
+              <key>hash_algorithm</key>
+              <string>sha3_384</string>
+              <key>url</key>
+              <string>https://git.alchemyviewer.org/api/v4/projects/148/packages/generic/zlib-ng-940/2.0.5/zlib_ng-2.0.5-linux64-940.tar.xz</string>
+            </map>
+            <key>name</key>
+            <string>linux64</string>
+          </map>
+        </map>
+        <key>version</key>
+        <string>2.0.5</string>
+      </map>
+    </map>
     <key>package_description</key>
     <map>
       <key>canonical_repo</key>
@@ -41,7 +185,7 @@
           </map>
           <key>manifest</key>
           <array>
-            <string>include/sentry/*</string>         
+            <string>include/sentry/*</string>
             <string>LICENSES/sentry.txt</string>
           </array>
           <key>name</key>
@@ -86,7 +230,7 @@
           </map>
           <key>manifest</key>
           <array>
-            <string></string>
+            <string>lib/release/*</string>
           </array>
           <key>name</key>
           <string>linux</string>
