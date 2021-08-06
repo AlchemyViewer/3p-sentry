@@ -87,7 +87,7 @@ case "$AUTOBUILD_PLATFORM" in
     # -------------------------- linux, linux64 --------------------------
     linux*)
         pushd "$NATIVE_SOURCE_DIR"
-            # Linux build environment at Linden comes pre-polluted with stuff that can
+            # Linux build environment at Alchemy comes pre-polluted with stuff that can
             # seriously damage 3rd-party builds.  Environmental garbage you can expect
             # includes:
             #
@@ -106,7 +106,7 @@ case "$AUTOBUILD_PLATFORM" in
             opts="${TARGET_OPTS:--m$AUTOBUILD_ADDRSIZE}"
             # Use simple flags for crash reporter
             DEBUG_COMMON_FLAGS="$opts -Og -g -fPIC -DPIC"
-            RELEASE_COMMON_FLAGS="$opts -O2 -g -fPIC -DPIC -fstack-protector-strong -D_FORTIFY_SOURCE=2"
+            RELEASE_COMMON_FLAGS="$opts -O2 -g -fPIC -DPIC -D_FORTIFY_SOURCE=2"
             DEBUG_CFLAGS="$DEBUG_COMMON_FLAGS"
             RELEASE_CFLAGS="$RELEASE_COMMON_FLAGS"
             DEBUG_CXXFLAGS="$DEBUG_COMMON_FLAGS -std=c++17"
@@ -128,20 +128,22 @@ case "$AUTOBUILD_PLATFORM" in
             pushd "build_release"
                 cmake ../ -G"Ninja" \
                     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-                    #-DBUILD_SHARED_LIBS:BOOL=OFF \
                     -DCMAKE_CXX_STANDARD=17 \
                     -DCMAKE_C_FLAGS="$RELEASE_CFLAGS" \
                     -DCMAKE_CXX_FLAGS="$RELEASE_CXXFLAGS" \
-                    -DCMAKE_INSTALL_PREFIX="$stage/sentry/release"
+                    -DCMAKE_INSTALL_PREFIX="$stage/sentry" \
+                    -DSENTRY_BUILD_SHARED_LIBS=FALSE
 
                 cmake --build . --config RelWithDebInfo --parallel $AUTOBUILD_CPU_COUNT
-
-                # conditionally run unit tests
-                if [ "${DISABLE_UNIT_TESTS:-0}" = "0" ]; then
-                    ctest -C RelWithDebInfo
-                fi
-
                 cmake --install . --config RelWithDebInfo
+            popd
+
+            pushd "$stage/sentry"
+                mkdir -p "$stage/include/sentry"
+                mkdir -p "$stage/lib/release"
+
+                cp -a lib/*.a "$stage/lib/release"
+                cp -a include/* "$stage/include/sentry"
             popd
         popd
     ;;
