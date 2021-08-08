@@ -19,20 +19,6 @@
         <string>curl</string>
         <key>platforms</key>
         <map>
-          <key>darwin64</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>hash</key>
-              <string>8e55c9a8b1375150463910b05943d153a759d9a1b9bc484bff8253541101aabadf17cd140a187e0926eb42735a43eae1</string>
-              <key>hash_algorithm</key>
-              <string>sha3_384</string>
-              <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/89/packages/generic/curl/7.54.1.1085/curl-7.54.1-darwin64-1085.tar.xz</string>
-            </map>
-            <key>name</key>
-            <string>darwin64</string>
-          </map>
           <key>linux64</key>
           <map>
             <key>archive</key>
@@ -46,34 +32,6 @@
             </map>
             <key>name</key>
             <string>linux64</string>
-          </map>
-          <key>windows</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>hash</key>
-              <string>d5ce8a95cdaf68398ee71a4e81f108d58fbb3e81cd859cb4aed38ba5b2c08d94e59678f7816f5468f81ac2e61515616a</string>
-              <key>hash_algorithm</key>
-              <string>sha3_384</string>
-              <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/89/packages/generic/curl/7.54.1.1085/curl-7.54.1-windows-1085.tar.xz</string>
-            </map>
-            <key>name</key>
-            <string>windows</string>
-          </map>
-          <key>windows64</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>hash</key>
-              <string>239dbb42248e184a3588b7eec874b14ff5950a7cf3a08935a2b989bfc45faf088f5839f65b150fd548e29edf99196e09</string>
-              <key>hash_algorithm</key>
-              <string>sha3_384</string>
-              <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/89/packages/generic/curl/7.54.1.1085/curl-7.54.1-windows64-1085.tar.xz</string>
-            </map>
-            <key>name</key>
-            <string>windows64</string>
           </map>
         </map>
         <key>source_type</key>
@@ -134,20 +92,6 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <string>openssl</string>
         <key>platforms</key>
         <map>
-          <key>darwin64</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>hash</key>
-              <string>e42790fcd15daedb83eca89bad4bb5feb4454f873f489a9ff6485465603a16a33938bb3a40cd9c160dd3a55a784eff43</string>
-              <key>hash_algorithm</key>
-              <string>sha3_384</string>
-              <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/90/packages/generic/openssl/1.1.1k.1083/openssl-1.1.1k-darwin64-1083.tar.xz</string>
-            </map>
-            <key>name</key>
-            <string>darwin64</string>
-          </map>
           <key>linux64</key>
           <map>
             <key>archive</key>
@@ -161,34 +105,6 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             </map>
             <key>name</key>
             <string>linux64</string>
-          </map>
-          <key>windows</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>hash</key>
-              <string>4c74b8eda48f3df42bbf8fd700aec569265a7fce49b2af51aa67e9d395f4bbe21965ad59870e0d268863cd69cd8a5d8f</string>
-              <key>hash_algorithm</key>
-              <string>sha3_384</string>
-              <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/90/packages/generic/openssl/1.1.1k.1083/openssl-1.1.1k-windows-1083.tar.xz</string>
-            </map>
-            <key>name</key>
-            <string>windows</string>
-          </map>
-          <key>windows64</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>hash</key>
-              <string>f7abae884f9414f7b30f2a00e6736e3cfb83f90dfa23f07aaf0fd3d31c9e08ec3ae550a8f966cc1146899eb783848904</string>
-              <key>hash_algorithm</key>
-              <string>sha3_384</string>
-              <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/90/packages/generic/openssl/1.1.1k.1083/openssl-1.1.1k-windows64-1083.tar.xz</string>
-            </map>
-            <key>name</key>
-            <string>windows64</string>
           </map>
         </map>
         <key>version</key>
