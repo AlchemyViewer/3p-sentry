@@ -45,7 +45,7 @@ class SentrySDKTests: XCTestCase {
             options.dsn = SentrySDKTests.dsnAsString
             options.releaseName = "1.0.0"
             client = TestClient(options: options)!
-            hub = SentryHub(client: client, andScope: scope)
+            hub = SentryHub(client: client, andScope: scope, andCrashAdapter: TestSentryCrashAdapter.sharedInstance(), andCurrentDateProvider: currentDate)
             
             userFeedback = UserFeedback(eventId: SentryId())
             userFeedback.comments = "Again really?"
@@ -57,6 +57,7 @@ class SentrySDKTests: XCTestCase {
     private var fixture: Fixture!
     
     override func setUp() {
+        super.setUp()
         fixture = Fixture()
     }
     
@@ -70,8 +71,22 @@ class SentrySDKTests: XCTestCase {
         }) as? SentryAutoSessionTrackingIntegration {
             autoSessionTracking.stop()
         }
+        
+        clearTestState()
     }
     
+    // Repro for: https://github.com/getsentry/sentry-cocoa/issues/1325
+    func testStartWithZeroMaxBreadcrumbsOptionsDoesNotCrash() {
+        SentrySDK.start { options in
+            options.dsn = SentrySDKTests.dsnAsString
+            options.maxBreadcrumbs = 0
+        }
+
+        SentrySDK.addBreadcrumb(crumb: Breadcrumb(level: SentryLevel.warning, category: "test"))
+        let breadcrumbs = Dynamic(SentrySDK.currentHub().scope).breadcrumbArray as [Breadcrumb]?
+        XCTAssertEqual(0, breadcrumbs?.count)
+    }
+
     func testStartWithConfigureOptions() {
         SentrySDK.start { options in
             options.dsn = SentrySDKTests.dsnAsString
@@ -184,16 +199,7 @@ class SentrySDKTests: XCTestCase {
     
         assertEventCaptured(expectedScope: scope)
     }
-    
-    func testSpan() {
-        givenSdkWithHub()
-        
-        let span = SentrySDK.startTransaction(name: "Some Transaction", operation: "Operations", bindToScope: true)
-        let newSpan = SentrySDK.span
-        
-        XCTAssert(span === newSpan)
-    }
-    
+       
     func testCaptureEventWithScopeBlock_ScopePassedToHub() {
         givenSdkWithHub()
         
@@ -344,6 +350,15 @@ class SentrySDKTests: XCTestCase {
         XCTAssertEqual(event?.user, user)
     }
     
+    func testStartTransaction() {
+        givenSdkWithHub()
+        
+        let span = SentrySDK.startTransaction(name: "Some Transaction", operation: "Operations", bindToScope: true)
+        let newSpan = SentrySDK.span
+        
+        XCTAssert(span === newSpan)
+    }
+    
     func testPerformanceOfConfigureScope() {
         func buildCrumb(_ i: Int) -> Breadcrumb {
             let crumb = Breadcrumb()
@@ -420,6 +435,27 @@ class SentrySDKTests: XCTestCase {
         }
     }
     
+    @available(tvOS 13.0, *)
+    @available(OSX 10.15, *)
+    @available(iOS 13.0, *)
+    func testMemoryFootprintOfTransactions() {
+        SentrySDK.start { options in
+            options.dsn = SentrySDKTests.dsnAsString
+        }
+        
+        self.measure(metrics: [XCTMemoryMetric()]) {
+            for _ in 0...1_000 {
+                let trans = SentrySDK.startTransaction(name: "no leak", operation: "")
+                
+                for _ in 0...10 {
+                    let span = trans.startChild(operation: "ui.load")
+                    span.finish()
+                }
+                trans.finish()
+            }
+        }
+    }
+    
     func testStartSession() {
         givenSdkWithHub()
         
@@ -458,6 +494,94 @@ class SentrySDKTests: XCTestCase {
         XCTAssertEqual(fixture.options.releaseName ?? "", actual.releaseName)
         XCTAssertEqual(1, actual.duration)
         XCTAssertEqual(fixture.currentDate.date(), actual.timestamp)
+    }
+    
+    func testGlobalOptions() {
+        SentrySDK.setCurrentHub(fixture.hub)
+        XCTAssertEqual(SentrySDK.options, fixture.options)
+    }
+    
+    func testSetAppStartMeasurement_CallsPrivateSDKCallback() {
+        let appStartMeasurement = TestData.getAppStartMeasurement(type: .warm)
+        
+        var callbackCalled = false
+        PrivateSentrySDKOnly.onAppStartMeasurementAvailable = { measurement in
+            XCTAssertEqual(appStartMeasurement, measurement)
+            callbackCalled = true
+        }
+        
+        SentrySDK.setAppStartMeasurement(appStartMeasurement)
+        XCTAssertTrue(callbackCalled)
+    }
+    
+    func testSetAppStartMeasurement_NoCallback_CallbackNotCalled() {
+        let appStartMeasurement = TestData.getAppStartMeasurement(type: .warm)
+        
+        SentrySDK.setAppStartMeasurement(appStartMeasurement)
+        
+        XCTAssertEqual(SentrySDK.getAppStartMeasurement(), appStartMeasurement)
+    }
+    
+    func testIsEnabled() {
+        XCTAssertFalse(SentrySDK.isEnabled)
+        
+        SentrySDK.capture(message: "message")
+        XCTAssertFalse(SentrySDK.isEnabled)
+        
+        SentrySDK.start { options in
+            options.dsn = SentrySDKTests.dsnAsString
+        }
+        XCTAssertTrue(SentrySDK.isEnabled)
+        
+        SentrySDK.close()
+        XCTAssertFalse(SentrySDK.isEnabled)
+        
+        SentrySDK.capture(message: "message")
+        XCTAssertFalse(SentrySDK.isEnabled)
+        
+        SentrySDK.start { options in
+            options.dsn = SentrySDKTests.dsnAsString
+        }
+        XCTAssertTrue(SentrySDK.isEnabled)
+    }
+    
+    // Altough we only run this test above the below specified versions, we exped the
+    // implementation to be thread safe
+    @available(tvOS 10.0, *)
+    @available(OSX 10.12, *)
+    @available(iOS 10.0, *)
+    func testSetpAppStartMeasurmentConcurrently_() {
+        func setAppStartMeasurement(_ queue: DispatchQueue, _ i: Int) {
+            group.enter()
+            queue.async {
+                let timestamp = self.fixture.currentDate.date().addingTimeInterval( TimeInterval(i))
+                let appStartMeasurement = TestData.getAppStartMeasurement(type: .warm, appStartTimestamp: timestamp)
+                SentrySDK.setAppStartMeasurement(appStartMeasurement)
+                group.leave()
+            }
+        }
+        
+        func createQueue() -> DispatchQueue {
+            return DispatchQueue(label: "SentrySDKTests", qos: .userInteractive, attributes: [.initiallyInactive])
+        }
+        
+        let queue1 = createQueue()
+        let queue2 = createQueue()
+        let group = DispatchGroup()
+        
+        let amount = 100
+        
+        for i in 0...amount {
+            setAppStartMeasurement(queue1, i)
+            setAppStartMeasurement(queue2, i)
+        }
+        
+        queue1.activate()
+        queue2.activate()
+        group.waitWithTimeout(timeout: 100)
+        
+        let timestamp = self.fixture.currentDate.date().addingTimeInterval(TimeInterval(amount))
+        XCTAssertEqual(timestamp, SentrySDK.getAppStartMeasurement()?.appStartTimestamp)
     }
     
     private func givenSdkWithHub() {

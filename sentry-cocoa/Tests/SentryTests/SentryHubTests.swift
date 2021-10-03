@@ -15,7 +15,7 @@ class SentryHubTests: XCTestCase {
         let message = "some message"
         let event: Event
         let currentDateProvider = TestCurrentDateProvider()
-        let sentryCrash = TestSentryCrashWrapper()
+        let sentryCrash = TestSentryCrashAdapter.sharedInstance()
         let fileManager: SentryFileManager
         let crashedSession: SentrySession
         let transactionName = "Some Transaction"
@@ -48,7 +48,7 @@ class SentryHubTests: XCTestCase {
         
         func getSut(_ options: Options, _ scope: Scope? = nil) -> SentryHub {
             client = TestClient(options: options)
-            let hub = SentryHub(client: client, andScope: scope, andCrashAdapter: sentryCrash)
+            let hub = SentryHub(client: client, andScope: scope, andCrashAdapter: sentryCrash, andCurrentDateProvider: currentDateProvider)
             hub.bindClient(client)
             return hub
         }
@@ -58,6 +58,7 @@ class SentryHubTests: XCTestCase {
     private var sut: SentryHub!
     
     override func setUp() {
+        super.setUp()
         fixture = Fixture()
         fixture.fileManager.deleteCurrentSession()
         fixture.fileManager.deleteCrashedSession()
@@ -69,6 +70,7 @@ class SentryHubTests: XCTestCase {
     }
     
     override func tearDown() {
+        super.tearDown()
         fixture.fileManager.deleteCurrentSession()
         fixture.fileManager.deleteCrashedSession()
         fixture.fileManager.deleteAppState()
@@ -282,6 +284,12 @@ class SentryHubTests: XCTestCase {
         testSampler(expected: .no) { options in
             options.tracesSampler = { _ in return -0.01 }
         }
+        
+        let hub = fixture.getSut()
+        Dynamic(hub).sampler.random = fixture.random
+        
+        let span = hub.startTransaction(name: fixture.transactionName, operation: fixture.transactionOperation)
+        XCTAssertEqual(span.context.sampled, .no)
     }
         
     func testCaptureMessageWithScope() {
@@ -611,7 +619,7 @@ class SentryHubTests: XCTestCase {
         modifyEventDict(&eventDict)
         
         let eventData = try JSONSerialization.data(withJSONObject: eventDict)
-        return SentryEnvelope(header: SentryEnvelopeHeader(id: event.eventId), items: [SentryEnvelopeItem(header: envelopeItem.header, data: eventData)])
+        return SentryEnvelope(header: SentryEnvelopeHeader(id: event.eventId, traceState: nil), items: [SentryEnvelopeItem(header: envelopeItem.header, data: eventData)])
     }
     
     private func advanceTime(bySeconds: TimeInterval) {

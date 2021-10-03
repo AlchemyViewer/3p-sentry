@@ -5,8 +5,13 @@ class SentryStacktraceBuilderTests: XCTestCase {
     
     private class Fixture {
         func getSut() -> SentryStacktraceBuilder {
-            SentryStacktraceBuilder(crashStackEntryMapper: SentryCrashStackEntryMapper(frameInAppLogic: SentryFrameInAppLogic(inAppIncludes: [], inAppExcludes: [])))
+            SentryStacktraceBuilder(crashStackEntryMapper: SentryCrashStackEntryMapper(inAppLogic: SentryInAppLogic(inAppIncludes: [], inAppExcludes: [])))
         }
+    }
+    
+    override func tearDown() {
+        super.tearDown()
+        SentrySDK.close()
     }
     
     private let fixture = Fixture()
@@ -45,13 +50,13 @@ class SentryStacktraceBuilderTests: XCTestCase {
     func testFramesOrder() {
         let actual = fixture.getSut().buildStacktraceForCurrentThread()
         
-        // Make sure the first 4 frames contain both start and main
+        // Make sure the first 4 frames contain main
         let frames = actual.frames[...3]
         let filteredFrames = frames.filter { frame in
-            return frame.function?.contains("start") ?? false || frame.function?.contains("main") ?? false
+            return frame.function?.contains("main") ?? false
         }
         
-        XCTAssertTrue(filteredFrames.count == 2, "The frames must be ordered from caller to callee, or oldest to youngest.")
+        XCTAssertTrue(filteredFrames.count == 1, "The frames must be ordered from caller to callee, or oldest to youngest.")
     }
     
     func testAsyncStacktraces() throws {
