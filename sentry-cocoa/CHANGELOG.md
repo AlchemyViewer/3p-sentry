@@ -1,5 +1,161 @@
 # Changelog
 
+## 7.4.1
+
+- fix: HTTP instrumentation KVO crash (#1354)
+
+## 7.4.0
+
+- feat: Add enableNetworkTracking flag (#1349)
+- fix: Memory Leak for Span (#1352)
+
+## 7.3.0
+
+- fix: Trying to swizzle a class without a library name (#1332)
+
+## 7.3.0-beta.0
+
+- fix: maxBreadcrumb zero crashes when adding (#1326)
+
+- feat: Add tracestate HTTP header support (#1291)
+
+## 7.2.10
+
+- No documented changes.
+
+## 7.2.9
+
+- Nothing
+
+## 7.2.8
+
+- fix: SpanProtocol add setData for Swift (#1305)
+- fix: SentryHub not checking spanContext sampled value (#1318)
+
+## 7.2.7
+
+- fix: Remove Trace Headers below iOS 14.0 (#1309)
+- fix: XCFramework output not preserving symlinks for macOS (#1281)
+
+## 7.2.6
+
+- fix: Add Trace Headers below iOS 14.0 (#1302)
+
+## 7.2.5
+
+- fix: Swizzling crash on iOS 13 (#1297)
+
+## 7.2.4
+
+- fix: Sentry HTTP Trace Header Breaking Requests (#1295)
+- fix: Apps crash when using a URLSessionTask subclass with currentRequest unavailable (#1294)
+
+## 7.2.3
+
+- fix: Build failure for SPM (#1284)
+- fix: Set app state on main thread when terminating (#1272)
+
+## 7.2.2
+
+- fix: Crash when swizzling Nib UIViewController (#1277)
+
+## 7.2.1
+
+This release fixes a crucial issue for auto performance instrumentation that caused crashes when using nested ViewControllers.
+
+- fix: Callback issue for auto performance (#1275)
+
+## 7.2.0
+
+This release contains support for [auto performance instrumentation](https://docs.sentry.io/platforms/apple/performance/instrumentation/automatic-instrumentation/)
+for ViewControllers, HTTP requests, app start and slow and frozen frames.
+
+### Auto Performance Features
+
+- feat: Auto UI Performance Instrumentation (#1105, #1150, #1136, #1139, #1042, #1264, #1164, #1202, #1231, #1242)
+- feat: Measure slow and frozen frames (#1123)
+- feat: Measure app start time (#1111, #1228)
+- feat: Add automatic HTTP request performance monitoring (#1178, #1237, #1250, #1255)
+- feat: Add tags to Sentry Span (#1243)
+- feat: Sub-millis precision for spans and events (#1234)
+- feat: Add Sentry Trace HTTP Header (#1213)
+
+### More Features
+
+- feat: Add flag stichAsyncCode (#1172)
+- feat: Support XCFramework for Carthage (#1175)
+- feat: Add isEnabled property in SentrySDK (#1265)
+- feat: Add breadcrumbs for HTTP requests (#1258)
+- feat: Add clearAttachments to Scope (#1195)
+- feat: Expose tracked screen frames (#1262)
+- feat: Expose AppStartMeasurment for Hybrid SDKs (#1251)
+
+### Fixes
+
+- fix: Remove invalid excludes from `Package.swift` (#1169)
+- fix: Compile failure with C99 (#1224)
+- fix: Race on session task (#1233)
+- fix: Remove tags and data if empty for Span (#1246)
+
+### Performance Improvements
+
+- perf: Scope sync to SentryCrash (#1193)
+
+## 7.2.0-beta.9
+
+- feat: Expose tracked screen frames (#1262)
+- feat: Expose AppStartMeasurment for Hybrid SDKs (#1251)
+- fix: Span serialization HTTP data in wrong place. (#1255)
+- feat: Add tags to Sentry Span (#1243)
+
+## 7.2.0-beta.8
+
+- fix: Remove tags and data if empty for Span (#1246)
+- fix: Race Conditions in NetworkTracker (#1250)
+- fix: Don't create transactions for HTTP Requests. (#1237)
+
+## 7.2.0-beta.7
+
+- fix: Swizzle only inApp ViewControllers (#1242)
+- feat: Add Sentry Trace HTTP Header (#1213)
+- feat: Sub-millis precision for spans and events (#1234)
+- fix: Race on session task (#1233)
+
+## 7.2.0-beta.6
+
+- fix: ViewController swizzling before iOS 13 (#1231)
+- fix: AppStartMeasurement didFinishLaunching is nil (#1228)
+
+## 7.2.0-beta.5
+
+- perf: Scope sync to SentryCrash (#1193)
+- fix: Compile failure with C99 (#1224)
+
+## 7.2.0-beta.4
+
+- fix: Add viewAppearing to UIViewController spans (#1202)
+
+## 7.2.0-beta.3
+
+- feat: Add automatic http request performance monitoring (#1178)
+- feat: Add clearAttachments to Scope (#1195)
+
+## 7.2.0-beta.2
+
+- feat: Add flag stichAsyncCode (#1172)
+- feat: Support XCFramework for Carthage (#1175)
+- fix: Remove invalid excludes from `Package.swift` (#1169)
+
+## 7.2.0-beta.1
+
+- feat: Measure slow and frozen frames (#1123)
+- fix: Operation names for auto instrumentation (#1164)
+
+## 7.2.0-beta.0
+
+- feat: Measure app start time (#1111)
+- feat: Auto UI Performance Instrumentation (#1105, #1150, #1136, #1139, #1042)
+
 ## 7.1.4
 
 - fix: Compile failure with C99 (#1224)
@@ -149,10 +305,10 @@ Features and fixes:
 ## 7.0.0-alpha.0
 
 **Breaking Change**: This version introduces a change to the grouping of issues. The SDK now sets the `inApp`
-flag for frames originating from only the main executable using [CFBundleExecutable](https://developer.apple.com/documentation/bundleresources/information_property_list/cfbundleexecutable). 
+flag for frames originating from only the main executable using [CFBundleExecutable](https://developer.apple.com/documentation/bundleresources/information_property_list/cfbundleexecutable).
 In previous versions, all frames originating from the application bundle were marked as `inApp`. This had the
 downside of marking frames of private frameworks inside the bundle as `inApp`. This problem is fixed now.
-Applications using static frameworks shouldn't be affected by this change. 
+Applications using static frameworks shouldn't be affected by this change.
 For more information on marking frames as inApp [docs](https://docs.sentry.io/platforms/apple/data-management/event-grouping/stack-trace-rules/#mark-in-app-frames).
 
 - fix: Mark frames as inApp #956
@@ -231,7 +387,7 @@ to group by domain only.
 
 - fix: Serialization of SentryScope #841
 - fix: Recrash parsing in SentryCrash #850
-- fix: Not crash during crash reporting #849 
+- fix: Not crash during crash reporting #849
 
 ## 6.0.8
 
@@ -335,11 +491,11 @@ Fix:
 This release also enables by default the option `attackStacktrace` which includes
 the stacktrace in all events, including `captureMessage` by default.
 
-Breaking Changes: 
+Breaking Changes:
 
 - feat: Attach stacktraces to all events by default #705
 
-Features and fixes: 
+Features and fixes:
 
 - feat: Crash event and session in same envelope #731
 - feat: Allow nil in setExtraValue on SentryScope to remove key #703
@@ -350,7 +506,7 @@ Breaking changes:
 
 - feat: Replace NSNumber with BOOL in SentryOptions #719
 
-Features and fixes: 
+Features and fixes:
 
 - fix: Header Imports for the Swift Package Manager #721
 - fix: Async storing of envelope to disk #714

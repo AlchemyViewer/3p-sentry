@@ -40,8 +40,8 @@ platform :ios do
     )
   end
 
-  desc "Upload iOS-Swift to TestFlight and symbols to Sentry"
-  lane :ios_swift_to_testflight do
+  desc "Build iOS-Swift with Release"
+  lane :build_ios_swift do
 
     keychain_name = "ios-swift.keychain"
     keychain_password = ENV["FASTLANE_KEYCHAIN_PASSWORD"]
@@ -84,6 +84,11 @@ platform :ios do
 			},
       archive_path: "iOS-Swift"
     )
+
+  end
+
+  desc "Upload iOS-Swift to TestFlight and symbols to Sentry"
+  lane :ios_swift_to_testflight do
     
     testflight
 
@@ -99,6 +104,29 @@ platform :ios do
       project_slug: 'sentry-cocoa',
       symbol_maps: 'iOS-Swift.xcarchive/BCSymbolMaps/'
     )
+  end
+
+  lane :ui_tests do
+    run_tests(
+      workspace: "Sentry.xcworkspace",
+      scheme: "iOS-SwiftUI"
+    )
+
+    run_tests(
+      workspace: "Sentry.xcworkspace",
+      scheme: "iOS-ObjectiveC"
+    )
+
+    run_tests(
+      workspace: "Sentry.xcworkspace",
+      scheme: "iOS-Swift"
+    )
+
+    run_tests(
+      workspace: "Sentry.xcworkspace",
+      scheme: "tvOS-Swift"
+    )
+
   end
 
 end
