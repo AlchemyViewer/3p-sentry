@@ -40,7 +40,6 @@ class ViewController: UIViewController {
                 self.dsnTextField.backgroundColor = UIColor.systemGreen
             }
         }
-        
     }
     
     @IBAction func addBreadcrumb(_ sender: Any) {
@@ -176,6 +175,13 @@ class ViewController: UIViewController {
     
     @IBAction func showNibController(_ sender: Any) {
         let nib = NibViewController()
-        present(nib, animated: true, completion: nil)
+        nib.title = "Nib View Controller"
+        navigationController?.pushViewController(nib, animated: false)
+    }
+    
+    @IBAction func showTableViewController(_ sender: Any) {
+        let controller = TableViewController(style: .plain)
+        controller.title = "Table View Controller"
+        navigationController?.pushViewController(controller, animated: false)
     }
 }
