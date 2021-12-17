@@ -1,5 +1,78 @@
 # Changelog
 
+## 7.7.0
+
+- feat: Send Locale with Events (#1539)
+
+## 7.6.1
+
+- fix: iOS13-Swift build (#1522)
+- fix: Check task support on setState: (#1523)
+
+## 7.6.0
+
+- fix: Create span for loadView (#1495)
+- feat: Add flag to control network requests breadcrumbs (#1505)
+- feat: Support for ignored signals with SIGN_IGN (#1489)
+
+## 7.5.4
+
+- fix: Sending OOM when SDK is closed (#1487)
+
+## 7.5.3
+
+- fix: Use swizzling instead of KVO for network tracking (#1452)
+
+## 7.5.2
+
+### Various fixes & improvements
+
+- fix: AppStart Transaction for Apps Using UIScenes (#1427) by @brustolin
+
+## 7.5.1
+
+- fix: SentryOptions initWithDict type errors (#1443)
+- fix: Transaction default status should be OK (#1439)
+- fix: AppStart Transaction for Apps Using UIScenes (#1427)
+
+## 7.5.0
+
+- feat: Add one flag to disable all swizzling (#1430)
+- fix: Dispatch Queue ARC Warning for RN (#1424)
+- fix: Dictionary Key cannot be nil, in SentryPerformanceTracer (#1434)
+
+## 7.4.8
+
+- fix: Crash when objc_getClassList returns different values (#1420)
+
+## 7.4.7
+
+- fix: Only enable APM when traceRate set (#1417)
+- fix: Crash in Span when Tracer nil (#1416)
+- fix: Instrumenting multiple UIViewControllers (#1409)
+- fix: Clear unfinished transaction in UIViewController APM (#1408)
+
+## 7.4.6
+
+- fix: Crash when Getting Subclasses (#1396)
+
+## 7.4.5
+
+- fix: Remove Check for Original Method Call When Swizzling (#1383)
+- fix: Init for Span, Tracer, Transaction (#1385)
+
+## 7.4.4
+
+- fix: Crash for Call Should be on Main Thread (#1371)
+
+## 7.4.3
+
+- fix: Crash for Custom ViewController init on iOS 15 (#1361)
+
+## 7.4.2
+
+- fix: Crash When Observing Span Finished (#1360)
+
 ## 7.4.1
 
 - fix: HTTP instrumentation KVO crash (#1354)

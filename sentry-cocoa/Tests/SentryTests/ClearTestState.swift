@@ -3,6 +3,8 @@ import Foundation
 func clearTestState() {
     SentrySDK.close()
     SentrySDK.setCurrentHub(nil)
+    SentrySDK.crashedLastRunCalled = false
+    
     PrivateSentrySDKOnly.onAppStartMeasurementAvailable = nil
     PrivateSentrySDKOnly.appStartMeasurementHybridSDKMode = false
     SentrySDK.setAppStartMeasurement(nil)

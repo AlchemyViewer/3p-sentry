@@ -9,12 +9,13 @@
 #import "SentryTracer.h"
 #import "SentryTransactionContext.h"
 
+NS_ASSUME_NONNULL_BEGIN
+
 @interface
 SentryPerformanceTracker ()
 
 @property (nonatomic, strong) NSMutableDictionary<SentrySpanId *, id<SentrySpan>> *spans;
-
-@property (nonatomic, strong) NSMutableArray<id<SentrySpan>> *activeStack;
+@property (nonatomic, strong) NSMutableArray<id<SentrySpan>> *activeSpanStack;
 
 @end
 
@@ -32,21 +33,21 @@ SentryPerformanceTracker ()
 {
     if (self = [super init]) {
         self.spans = [[NSMutableDictionary alloc] init];
-        self.activeStack = [[NSMutableArray alloc] init];
+        self.activeSpanStack = [[NSMutableArray alloc] init];
     }
     return self;
 }
 
 - (SentrySpanId *)startSpanWithName:(NSString *)name operation:(NSString *)operation
 {
-    id<SentrySpan> activeSpanTracker;
-    @synchronized(self.activeStack) {
-        activeSpanTracker = [self.activeStack lastObject];
+    id<SentrySpan> activeSpan;
+    @synchronized(self.activeSpanStack) {
+        activeSpan = [self.activeSpanStack lastObject];
     }
 
     id<SentrySpan> newSpan;
-    if (activeSpanTracker != nil) {
-        newSpan = [activeSpanTracker startChildWithOperation:operation description:name];
+    if (activeSpan != nil) {
+        newSpan = [activeSpan startChildWithOperation:operation description:name];
     } else {
         SentryTransactionContext *context =
             [[SentryTransactionContext alloc] initWithName:name operation:operation];
@@ -59,8 +60,14 @@ SentryPerformanceTracker ()
 
     SentrySpanId *spanId = newSpan.context.spanId;
 
-    @synchronized(self.spans) {
-        self.spans[spanId] = newSpan;
+    if (spanId != nil) {
+        @synchronized(self.spans) {
+            self.spans[spanId] = newSpan;
+        }
+    } else {
+        [SentryLog logWithMessage:@"startSpanWithName:operation: spanId is nil."
+                         andLevel:kSentryLevelError];
+        return [SentrySpanId empty];
     }
 
     return spanId;
@@ -82,47 +89,57 @@ SentryPerformanceTracker ()
                       parentSpanId:(SentrySpanId *)parentSpanId
                            inBlock:(void (^)(void))block
 {
-    if (![self isSpanAlive:parentSpanId]) {
-        block();
-        return;
-    }
-
-    [self pushActiveSpan:parentSpanId];
-    [self measureSpanWithDescription:description operation:operation inBlock:block];
-    [self popActiveSpan];
+    [self activateSpan:parentSpanId
+           duringBlock:^{
+               [self measureSpanWithDescription:description operation:operation inBlock:block];
+           }];
 }
 
-- (nullable SentrySpanId *)activeSpan
+- (void)activateSpan:(SentrySpanId *)spanId duringBlock:(void (^)(void))block
 {
-    @synchronized(self.activeStack) {
-        return [self.activeStack lastObject].context.spanId;
+
+    if ([self pushActiveSpan:spanId]) {
+        block();
+        [self popActiveSpan];
+    } else {
+        block();
     }
 }
 
-- (void)pushActiveSpan:(SentrySpanId *)spanId
+- (nullable SentrySpanId *)activeSpanId
+{
+    @synchronized(self.activeSpanStack) {
+        return [self.activeSpanStack lastObject].context.spanId;
+    }
+}
+
+- (BOOL)pushActiveSpan:(SentrySpanId *)spanId
 {
     id<SentrySpan> toActiveSpan;
     @synchronized(self.spans) {
         toActiveSpan = self.spans[spanId];
     }
 
-    if (toActiveSpan != nil) {
-        @synchronized(self.activeStack) {
-            [self.activeStack addObject:toActiveSpan];
-        }
+    if (toActiveSpan == nil) {
+        return NO;
     }
+
+    @synchronized(self.activeSpanStack) {
+        [self.activeSpanStack addObject:toActiveSpan];
+    }
+    return YES;
 }
 
 - (void)popActiveSpan
 {
-    @synchronized(self.activeStack) {
-        [self.activeStack removeLastObject];
+    @synchronized(self.activeSpanStack) {
+        [self.activeSpanStack removeLastObject];
     }
 }
 
 - (void)finishSpan:(SentrySpanId *)spanId
 {
-    [self finishSpan:spanId withStatus:kSentrySpanStatusUndefined];
+    [self finishSpan:spanId withStatus:kSentrySpanStatusOk];
 }
 
 - (void)finishSpan:(SentrySpanId *)spanId withStatus:(SentrySpanStatus)status
@@ -133,9 +150,7 @@ SentryPerformanceTracker ()
         [self.spans removeObjectForKey:spanId];
     }
 
-    @synchronized(self.activeStack) {
-        [spanTracker finishWithStatus:status];
-    }
+    [spanTracker finishWithStatus:status];
 }
 
 - (BOOL)isSpanAlive:(SentrySpanId *)spanId
@@ -145,7 +160,7 @@ SentryPerformanceTracker ()
     }
 }
 
-- (id<SentrySpan>)getSpan:(SentrySpanId *)spanId
+- (nullable id<SentrySpan>)getSpan:(SentrySpanId *)spanId
 {
     @synchronized(self.spans) {
         return self.spans[spanId];
@@ -153,3 +168,5 @@ SentryPerformanceTracker ()
 }
 
 @end
+
+NS_ASSUME_NONNULL_END
