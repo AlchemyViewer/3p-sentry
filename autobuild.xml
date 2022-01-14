@@ -24,11 +24,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>b9aff9c2a2f1ad659837cedaca0a31c6a1c610dbfebe404fcbb5fac201e267f875685ad0b014ab52a75e72e4ee5685eb66a92c922501fbfa901c735553b1d05e</string>
+              <string>ad535a9686ff1cc84a5a0a0a3d4231569a4244bec74e2ff9f35750bc03088fdb999baa54b01d5619fb98720b6e73804e39e641ae65107df36fb21794c3f61cfc</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/89/packages/generic/curl/7.54.1.1308/curl-7.54.1-linux64-1308.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/89/packages/generic/curl/7.54.1.1354/curl-7.54.1-linux64-1354.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -97,18 +97,18 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>193b82332e5cade6206152532ea8d2a5d893cc0b6ed0769fa605c79440faa8c583bb61d09be2f3e224009005ddd61a3dd943059e130ba66ba3de5228d1748173</string>
+              <string>cdb9a841e85d2bed15e582a9ad9189b01e65add7148ea7b7d9f40ef16b8ce4551e7ac0260ac5e19ad27b64996a83c7097ac4d43c5c8ed68867a868b06fc31b41</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/90/packages/generic/openssl/1.1.1l.1296/openssl-1.1.1l-linux64-1296.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/90/packages/generic/openssl/1.1.1m.1348/openssl-1.1.1m-linux64-1348.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
           </map>
         </map>
         <key>version</key>
-        <string>1.1.1l</string>
+        <string>1.1.1m</string>
       </map>
       <key>zlib-ng</key>
       <map>
@@ -131,18 +131,18 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>88685a966a85f92abbc26971728f0eb40de42cfc62325aa881a28cdd832c12b9ac4256fb40d26a50b8184886a80bd3af75cb5156f6fac06940d8d523559d3d4b</string>
+              <string>5a9482c3c83686e9df50ea928031995b2a90489cc30cba4f4589549e65f18244e47bd46cc7877e2307f8ee90ed4fbb291d754e6526f310913730a3672a7a801b</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/148/packages/generic/zlib-ng/2.0.5.1289/zlib_ng-2.0.5-linux64-1289.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/148/packages/generic/zlib-ng/2.0.6.1345/zlib_ng-2.0.6-linux64-1345.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
           </map>
         </map>
         <key>version</key>
-        <string>2.0.5</string>
+        <string>2.0.6</string>
       </map>
     </map>
     <key>package_description</key>
