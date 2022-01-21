@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.13
+
+**Features**
+
+- Add client-side stackwalking on Linux, Windows, and macOS (disabled by default).
+- CMake: add ability to set solution folder name.
+- Add AIX support.
+
+**Fixes**
+
+- CMake: check whether libcurl was already found.
+- Increment CXX standard version to 14 to allow crashpad to build.
+
+**Internal**:
+
+- Update Crashpad and Breakpad submodules to 2021-12-03.
+
+**Thank you**:
+
+Features, fixes and improvements in this release have been contributed by:
+
+- [@Mixaill](https://github.com/Mixaill)
+- [@ladislavmacoun](https://github.com/ladislavmacoun)
+- [@NattyNarwhal](https://github.com/NattyNarwhal)
+- [@mjvankampen](https://github.com/mjvankampen)
+
 ## 0.4.12
 
 **Features**:

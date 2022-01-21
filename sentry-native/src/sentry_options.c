@@ -38,7 +38,10 @@ sentry_options_new(void)
     opts->auto_session_tracking = true;
     opts->system_crash_reporter_enabled = false;
     opts->symbolize_stacktraces =
-#ifdef SENTRY_PLATFORM_ANDROID
+    // AIX doesn't have reliable debug IDs for server-side symbolication,
+    // and the diversity of Android makes it infeasible to have access to debug
+    // files.
+#if defined(SENTRY_PLATFORM_ANDROID) || defined(SENTRY_PLATFORM_AIX)
         true;
 #else
         false;
@@ -48,6 +51,9 @@ sentry_options_new(void)
     opts->sample_rate = 1.0;
     opts->refcount = 1;
     opts->shutdown_timeout = SENTRY_DEFAULT_SHUTDOWN_TIMEOUT;
+
+    opts->traces_sample_rate = 0.0;
+    opts->max_spans = 0;
     return opts;
 }
 
@@ -368,3 +374,50 @@ sentry_options_set_database_pathw(sentry_options_t *opts, const wchar_t *path)
     opts->database_path = sentry__path_from_wstr(path);
 }
 #endif
+
+/**
+ * Sets the maximum number of spans that can be attached to a
+ * transaction.
+ */
+void
+sentry_options_set_max_spans(sentry_options_t *opts, size_t max_spans)
+{
+    opts->max_spans = max_spans;
+}
+
+/**
+ * Gets the maximum number of spans that can be attached to a
+ * transaction.
+ */
+size_t
+sentry_options_get_max_spans(sentry_options_t *opts)
+{
+    return opts->max_spans;
+}
+
+/**
+ * Sets the sample rate for transactions. Should be a double between
+ * `0.0` and `1.0`. Transactions will be randomly discarded during
+ * `sentry_transaction_finish` when the sample rate is < 1.0.
+ */
+void
+sentry_options_set_traces_sample_rate(
+    sentry_options_t *opts, double sample_rate)
+{
+
+    if (sample_rate < 0.0) {
+        sample_rate = 0.0;
+    } else if (sample_rate > 1.0) {
+        sample_rate = 1.0;
+    }
+    opts->traces_sample_rate = sample_rate;
+}
+
+/**
+ * Returns the sample rate for transactions.
+ */
+double
+sentry_options_get_traces_sample_rate(sentry_options_t *opts)
+{
+    return opts->traces_sample_rate;
+}

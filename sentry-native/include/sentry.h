@@ -24,7 +24,7 @@ extern "C" {
 
 /* SDK Version */
 #define SENTRY_SDK_NAME "sentry.native"
-#define SENTRY_SDK_VERSION "0.4.12"
+#define SENTRY_SDK_VERSION "0.4.13"
 #define SENTRY_SDK_USER_AGENT SENTRY_SDK_NAME "/" SENTRY_SDK_VERSION
 
 /* common platform detection */
@@ -45,6 +45,10 @@ extern "C" {
 #    define SENTRY_PLATFORM_UNIX
 #elif defined(__linux) || defined(__linux__)
 #    define SENTRY_PLATFORM_LINUX
+#    define SENTRY_PLATFORM_UNIX
+#elif defined(_AIX)
+/* IBM i PASE is also counted as AIX */
+#    define SENTRY_PLATFORM_AIX
 #    define SENTRY_PLATFORM_UNIX
 #else
 #    error unsupported platform
@@ -189,7 +193,7 @@ SENTRY_API sentry_value_t sentry_value_new_int32(int32_t value);
 SENTRY_API sentry_value_t sentry_value_new_double(double value);
 
 /**
- * Creates a new boolen value.
+ * Creates a new boolean value.
  */
 SENTRY_API sentry_value_t sentry_value_new_bool(int value);
 
@@ -578,7 +582,7 @@ SENTRY_API int sentry_envelope_write_to_file(
 /**
  * The Sentry Client Options.
  *
- * See https://docs.sentry.io/error-reporting/configuration/
+ * See https://docs.sentry.io/platforms/native/configuration/
  */
 struct sentry_options_s;
 typedef struct sentry_options_s sentry_options_t;
@@ -1193,6 +1197,34 @@ SENTRY_API void sentry_start_session(void);
  * Ends a session.
  */
 SENTRY_API void sentry_end_session(void);
+
+/**
+ * Sets the maximum number of spans that can be attached to a
+ * transaction.
+ */
+SENTRY_EXPERIMENTAL_API void sentry_options_set_max_spans(
+    sentry_options_t *opts, size_t max_spans);
+
+/**
+ * Gets the maximum number of spans that can be attached to a
+ * transaction.
+ */
+SENTRY_EXPERIMENTAL_API size_t sentry_options_get_max_spans(
+    sentry_options_t *opts);
+
+/**
+ * Sets the sample rate for transactions. Should be a double between
+ * `0.0` and `1.0`. Transactions will be randomly discarded during
+ * `sentry_transaction_finish` when the sample rate is < 1.0.
+ */
+SENTRY_EXPERIMENTAL_API void sentry_options_set_traces_sample_rate(
+    sentry_options_t *opts, double sample_rate);
+
+/**
+ * Returns the sample rate for transactions.
+ */
+SENTRY_EXPERIMENTAL_API double sentry_options_get_traces_sample_rate(
+    sentry_options_t *opts);
 
 #ifdef __cplusplus
 }
