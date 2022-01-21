@@ -235,6 +235,34 @@ class SentryTracerTests: XCTestCase {
         assertAppStartMeasurementNotPutOnTransaction()
     }
     
+    func testFinish_WithUnfinishedChildren() {
+        CurrentDate.setCurrentDateProvider(DefaultCurrentDateProvider.sharedInstance())
+        let sut = fixture.getSut(waitForChildren: false)
+        let child1 = sut.startChild(operation: fixture.transactionOperation)
+        let child2 = sut.startChild(operation: fixture.transactionOperation)
+        let child3 = sut.startChild(operation: fixture.transactionOperation)
+        child2.finish()
+        
+        //Without this sleep sut.timestamp and child2.timestamp sometimes
+        //are equal we need to make sure that SentryTracer is not changing
+        //the timestamp value of proper finished spans.
+        Thread.sleep(forTimeInterval: 0.1)
+        
+        sut.finish()
+        
+        XCTAssertTrue(child1.isFinished)
+        XCTAssertEqual(child1.context.status, .deadlineExceeded)
+        XCTAssertEqual(sut.timestamp, child1.timestamp)
+        
+        XCTAssertTrue(child2.isFinished)
+        XCTAssertEqual(child2.context.status, .ok)
+        XCTAssertNotEqual(sut.timestamp, child2.timestamp)
+        
+        XCTAssertTrue(child3.isFinished)
+        XCTAssertEqual(child3.context.status, .deadlineExceeded)
+        XCTAssertEqual(sut.timestamp, child3.timestamp)
+    }
+    
     // Although we only run this test above the below specified versions, we expect the
     // implementation to be thread safe
     @available(tvOS 10.0, *)

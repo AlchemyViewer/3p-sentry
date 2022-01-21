@@ -1,5 +1,18 @@
 # Changelog
 
+## 7.9.0
+
+- fix: Crash in SentrySubClassFinder (#1635)
+- fix: Set timestamp in init of event (#1629)
+- fix: Load invalid CrashState json (#1625)
+- feat: Auto I/O spans for NSData (#1557)
+
+## 7.8.0
+
+- feat: Support for fatalError, assert, precondition (#1596)
+- feat: Include unfinished spans in transactions (#1592)
+- build: Disable NSAssertions for Release Builds (#1545)
+
 ## 7.7.0
 
 - feat: Send Locale with Events (#1539)
