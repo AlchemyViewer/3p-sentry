@@ -279,7 +279,6 @@ if(SENTRY_TRANSPORT_CURL)
 		${CMAKE_SOURCE_DIR}/../stage/packages/lib/release/libssl.a
 		${CMAKE_SOURCE_DIR}/../stage/packages/lib/release/libcrypto.a
 		${CMAKE_SOURCE_DIR}/../stage/packages/lib/release/libnghttp2.a
-		${CMAKE_SOURCE_DIR}/../stage/packages/lib/release/libcares.a
 		${CMAKE_SOURCE_DIR}/../stage/packages/lib/release/libz.a
 		)
 
