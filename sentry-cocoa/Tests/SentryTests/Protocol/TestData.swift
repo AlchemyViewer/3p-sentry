@@ -1,4 +1,5 @@
 #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+import Sentry
 import UIKit
 #endif
 
@@ -164,8 +165,10 @@ class TestData {
         case awesomeCentaur
     }
     
+    static var someUUID = "12345678-1234-1234-1234-12344567890AB"
+    
     static var appState: SentryAppState {
-        return SentryAppState(releaseName: "1.0.0", osVersion: "14.4.1", isDebugging: false, systemBootTimestamp: timestamp)
+        return SentryAppState(releaseName: "1.0.0", osVersion: "14.4.1", vendorId: someUUID, isDebugging: false, systemBootTimestamp: timestamp)
     }
     
     static var oomEvent: Event {
@@ -201,6 +204,14 @@ class TestData {
         scope.add(crumb2)
         
         return scope
+    }
+    
+    static var userFeedback: UserFeedback {
+        let userFeedback = UserFeedback(eventId: SentryId())
+        userFeedback.comments = "It doesn't really"
+        userFeedback.email = "john@me.com"
+        userFeedback.name = "John Me"
+        return userFeedback
     }
     
     static func setContext(_ scope: Scope) {

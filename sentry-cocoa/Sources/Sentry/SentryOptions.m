@@ -1,6 +1,5 @@
 #import "SentryOptions.h"
 #import "SentryDsn.h"
-#import "SentryError.h"
 #import "SentryLog.h"
 #import "SentryMeta.h"
 #import "SentrySDK.h"
@@ -11,6 +10,7 @@ SentryOptions ()
 
 @property (nullable, nonatomic, copy, readonly) NSNumber *defaultSampleRate;
 @property (nullable, nonatomic, copy, readonly) NSNumber *defaultTracesSampleRate;
+@property (nonatomic, strong) NSMutableSet<NSString *> *disabledIntegrations;
 
 @end
 
@@ -19,11 +19,15 @@ SentryOptions ()
 + (NSArray<NSString *> *)defaultIntegrations
 {
     return @[
-        @"SentryCrashIntegration", @"SentryFramesTrackingIntegration",
-        @"SentryAutoBreadcrumbTrackingIntegration", @"SentryAutoSessionTrackingIntegration",
-        @"SentryAppStartTrackingIntegration", @"SentryOutOfMemoryTrackingIntegration",
-        @"SentryPerformanceTrackingIntegration", @"SentryNetworkTrackingIntegration",
-        @"SentryFileIOTrackingIntegration"
+        @"SentryCrashIntegration",
+#if SENTRY_HAS_UIKIT
+        @"SentryANRTrackingIntegration",
+#endif
+        @"SentryFramesTrackingIntegration", @"SentryAutoBreadcrumbTrackingIntegration",
+        @"SentryAutoSessionTrackingIntegration", @"SentryAppStartTrackingIntegration",
+        @"SentryOutOfMemoryTrackingIntegration", @"SentryPerformanceTrackingIntegration",
+        @"SentryNetworkTrackingIntegration", @"SentryFileIOTrackingIntegration",
+        @"SentryCoreDataTrackingIntegration"
     ];
 }
 
@@ -36,6 +40,7 @@ SentryOptions ()
         self.maxBreadcrumbs = defaultMaxBreadcrumbs;
         self.maxCacheItems = 30;
         self.integrations = SentryOptions.defaultIntegrations;
+        self.disabledIntegrations = [NSMutableSet new];
         _defaultSampleRate = @1;
         self.sampleRate = _defaultSampleRate;
         self.enableAutoSessionTracking = YES;
@@ -46,13 +51,21 @@ SentryOptions ()
         self.maxAttachmentSize = 20 * 1024 * 1024;
         self.sendDefaultPii = NO;
         self.enableAutoPerformanceTracking = YES;
+#if SENTRY_HAS_UIKIT
+        self.enableUIViewControllerTracking = YES;
+#endif
         self.enableNetworkTracking = YES;
         self.enableFileIOTracking = NO;
         self.enableNetworkBreadcrumbs = YES;
         _defaultTracesSampleRate = nil;
         self.tracesSampleRate = _defaultTracesSampleRate;
+        self.enableCoreDataTracking = NO;
         _experimentalEnableTraceSampling = NO;
         _enableSwizzling = YES;
+#if SENTRY_TARGET_PROFILING_SUPPORTED
+        self.enableProfiling = NO;
+#endif
+        self.sendClientReports = YES;
 
         // Use the name of the bundle’s executable file as inAppInclude, so SentryInAppLogic
         // marks frames coming from there as inApp. With this approach, the SDK marks public
@@ -213,6 +226,11 @@ SentryOptions ()
     [self setBool:options[@"enableAutoPerformanceTracking"]
             block:^(BOOL value) { self->_enableAutoPerformanceTracking = value; }];
 
+#if SENTRY_HAS_UIKIT
+    [self setBool:options[@"enableUIViewControllerTracking"]
+            block:^(BOOL value) { self->_enableUIViewControllerTracking = value; }];
+#endif
+
     [self setBool:options[@"enableNetworkTracking"]
             block:^(BOOL value) { self->_enableNetworkTracking = value; }];
 
@@ -246,6 +264,17 @@ SentryOptions ()
 
     [self setBool:options[@"enableSwizzling"]
             block:^(BOOL value) { self->_enableSwizzling = value; }];
+
+    [self setBool:options[@"enableCoreDataTracking"]
+            block:^(BOOL value) { self->_enableCoreDataTracking = value; }];
+
+#if SENTRY_TARGET_PROFILING_SUPPORTED
+    [self setBool:options[@"enableProfiling"]
+            block:^(BOOL value) { self->_enableProfiling = value; }];
+#endif
+
+    [self setBool:options[@"sendClientReports"]
+            block:^(BOOL value) { self->_sendClientReports = value; }];
 
     if (nil != error && nil != *error) {
         return NO;
@@ -332,6 +361,21 @@ SentryOptions ()
     });
 
     return [block isKindOfClass:blockClass];
+}
+
+- (NSSet<NSString *> *)enabledIntegrations
+{
+    NSMutableSet<NSString *> *enabledIntegrations =
+        [[NSMutableSet alloc] initWithArray:self.integrations];
+    for (NSString *integration in self.disabledIntegrations) {
+        [enabledIntegrations removeObject:integration];
+    }
+    return enabledIntegrations;
+}
+
+- (void)removeEnabledIntegration:(NSString *)integration
+{
+    [self.disabledIntegrations addObject:integration];
 }
 
 @end
