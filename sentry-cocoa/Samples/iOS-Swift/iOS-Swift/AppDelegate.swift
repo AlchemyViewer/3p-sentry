@@ -24,6 +24,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             options.tracesSampleRate = 1.0
             options.sessionTrackingIntervalMillis = 5_000
             options.enableFileIOTracking = true
+            options.enableCoreDataTracking = true
+            options.enableProfiling = true
         }
         
         return true

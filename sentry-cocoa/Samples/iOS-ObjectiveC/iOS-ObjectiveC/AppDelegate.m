@@ -1,4 +1,5 @@
 #import "AppDelegate.h"
+@import CoreData;
 @import Sentry;
 
 @interface
@@ -19,6 +20,7 @@ AppDelegate ()
         options.sessionTrackingIntervalMillis = 5000UL;
         // Sampling 100% - In Production you probably want to adjust this
         options.tracesSampleRate = @1.0;
+        options.enableFileIOTracking = YES;
     }];
 
     return YES;

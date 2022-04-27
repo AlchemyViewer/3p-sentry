@@ -1,7 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <SentryAppState.h>
 #import <SentryAppStateManager.h>
-#import <SentryCrashAdapter.h>
+#import <SentryCrashWrapper.h>
 #import <SentryOptions.h>
 #import <SentryOutOfMemoryLogic.h>
 
@@ -13,7 +13,7 @@
 SentryOutOfMemoryLogic ()
 
 @property (nonatomic, strong) SentryOptions *options;
-@property (nonatomic, strong) SentryCrashAdapter *crashAdapter;
+@property (nonatomic, strong) SentryCrashWrapper *crashAdapter;
 @property (nonatomic, strong) SentryAppStateManager *appStateManager;
 
 @end
@@ -21,7 +21,7 @@ SentryOutOfMemoryLogic ()
 @implementation SentryOutOfMemoryLogic
 
 - (instancetype)initWithOptions:(SentryOptions *)options
-                   crashAdapter:(SentryCrashAdapter *)crashAdatper
+                   crashAdapter:(SentryCrashWrapper *)crashAdatper
                 appStateManager:(SentryAppStateManager *)appStateManager
 {
     if (self = [super init]) {
@@ -57,6 +57,12 @@ SentryOutOfMemoryLogic ()
         return NO;
     }
 
+    // This value can change when installing test builds using Xcode or when installing an app
+    // on a device using ad-hoc distribution.
+    if (![currentAppState.vendorId isEqualToString:previousAppState.vendorId]) {
+        return NO;
+    }
+
     // Restarting the app in development is a termination we can't catch and would falsely
     // report OOMs.
     if (previousAppState.isDebugging) {
@@ -76,6 +82,10 @@ SentryOutOfMemoryLogic ()
     // Was the app in foreground/active ?
     // If the app was in background we can't reliably tell if it was an OOM or not.
     if (!previousAppState.isActive) {
+        return NO;
+    }
+
+    if (previousAppState.isANROngoing) {
         return NO;
     }
 

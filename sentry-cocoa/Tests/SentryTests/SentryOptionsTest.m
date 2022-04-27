@@ -178,6 +178,16 @@
     [self testBooleanField:@"enableNetworkBreadcrumbs"];
 }
 
+- (void)testEnableCoreDataTracking
+{
+    [self testBooleanField:@"enableCoreDataTracking" defaultValue:NO];
+}
+
+- (void)testSendClientReports
+{
+    [self testBooleanField:@"sendClientReports" defaultValue:YES];
+}
+
 - (void)testDefaultMaxBreadcrumbs
 {
     SentryOptions *options = [self getValidOptions:@{}];
@@ -310,6 +320,30 @@
 
     XCTAssertTrue([[SentryOptions defaultIntegrations] isEqualToArray:options.integrations],
         @"Default integrations are not set correctly");
+}
+
+- (void)testEnabledIntegrations_SameAsDefault
+{
+    SentryOptions *options = [self getValidOptions:@{}];
+
+    [self assertArrayEquals:[SentryOptions defaultIntegrations]
+                     actual:options.enabledIntegrations.allObjects];
+}
+
+- (void)testEnabledIntegrations_AddCustomAndRemoveIntegration
+{
+    NSMutableArray<NSString *> *integrations = [SentryOptions defaultIntegrations].mutableCopy;
+    [integrations addObject:@"Custom"];
+
+    SentryOptions *options = [self getValidOptions:@{}];
+    options.integrations = integrations;
+
+    NSString *crashIntegration = @"SentryCrashIntegration";
+    NSMutableArray<NSString *> *expected = integrations.mutableCopy;
+    [expected removeObject:crashIntegration];
+
+    [options removeEnabledIntegration:crashIntegration];
+    [self assertArrayEquals:expected actual:options.enabledIntegrations.allObjects];
 }
 
 - (void)testSampleRateWithDict
@@ -457,6 +491,9 @@
         @"maxAttachmentSize" : [NSNull null],
         @"sendDefaultPii" : [NSNull null],
         @"enableAutoPerformanceTracking" : [NSNull null],
+#if SENTRY_HAS_UIKIT
+        @"enableUIViewControllerTracking" : [NSNull null],
+#endif
         @"enableNetworkTracking" : [NSNull null],
         @"tracesSampleRate" : [NSNull null],
         @"tracesSampler" : [NSNull null],
@@ -465,7 +502,7 @@
         @"urlSessionDelegate" : [NSNull null],
         @"experimentalEnableTraceSampling" : [NSNull null],
         @"enableSwizzling" : [NSNull null],
-        @"enableIOTracking" : [NSNull null],
+        @"enableIOTracking" : [NSNull null]
     }
                                                 didFailWithError:nil];
 
@@ -497,6 +534,9 @@
     XCTAssertEqual(20 * 1024 * 1024, options.maxAttachmentSize);
     XCTAssertEqual(NO, options.sendDefaultPii);
     XCTAssertTrue(options.enableAutoPerformanceTracking);
+#if SENTRY_HAS_UIKIT
+    XCTAssertTrue(options.enableUIViewControllerTracking);
+#endif
     XCTAssertEqual(YES, options.enableNetworkTracking);
     XCTAssertNil(options.tracesSampleRate);
     XCTAssertNil(options.tracesSampler);
@@ -506,6 +546,9 @@
     XCTAssertFalse(options.experimentalEnableTraceSampling);
     XCTAssertEqual(YES, options.enableSwizzling);
     XCTAssertEqual(NO, options.enableFileIOTracking);
+#if SENTRY_TARGET_PROFILING_SUPPORTED
+    XCTAssertEqual(NO, options.enableProfiling);
+#endif
 }
 
 - (void)testSetValidDsn
@@ -575,6 +618,13 @@
     [self testBooleanField:@"enableAutoPerformanceTracking"];
 }
 
+#if SENTRY_HAS_UIKIT
+- (void)testEnableUIViewControllerTracking
+{
+    [self testBooleanField:@"enableUIViewControllerTracking"];
+}
+#endif
+
 - (void)testEnableNetworkTracking
 {
     [self testBooleanField:@"enableNetworkTracking"];
@@ -584,6 +634,13 @@
 {
     [self testBooleanField:@"enableSwizzling"];
 }
+
+#if SENTRY_TARGET_PROFILING_SUPPORTED
+- (void)testEnableProfiling
+{
+    [self testBooleanField:@"enableProfiling" defaultValue:NO];
+}
+#endif
 
 - (void)testTracesSampleRate
 {
