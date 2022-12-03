@@ -1,92 +1,86 @@
 #import "SentryANRTrackingIntegration.h"
 #import "SentryANRTracker.h"
+#import "SentryClient+Private.h"
+#import "SentryCrashMachineContext.h"
 #import "SentryCrashWrapper.h"
 #import "SentryDefaultCurrentDateProvider.h"
 #import "SentryDispatchQueueWrapper.h"
-#import "SentryLog.h"
+#import "SentryEvent.h"
+#import "SentryException.h"
+#import "SentryHub+Private.h"
+#import "SentryMechanism.h"
+#import "SentrySDK+Private.h"
+#import "SentryThread.h"
+#import "SentryThreadInspector.h"
 #import "SentryThreadWrapper.h"
-#import <Foundation/Foundation.h>
-#import <SentryAppState.h>
-#import <SentryAppStateManager.h>
 #import <SentryDependencyContainer.h>
 #import <SentryOptions+Private.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-#if SENTRY_HAS_UIKIT
-
-/**
- * As we only use the ANR tracking integration for detecting falsely reported OOMs we can use a more
- * defensive value, because we are not reporting any ANRs.
- */
-static NSUInteger const SENTRY_ANR_TRACKER_TIMEOUT_MILLIS = 2000;
-
 @interface
 SentryANRTrackingIntegration ()
 
 @property (nonatomic, strong) SentryANRTracker *tracker;
-@property (nonatomic, strong) SentryAppStateManager *appStateManager;
-@property (nonatomic, strong) SentryCrashWrapper *crashWrapper;
+@property (nonatomic, strong) SentryOptions *options;
 
 @end
 
 @implementation SentryANRTrackingIntegration
 
-- (void)installWithOptions:(SentryOptions *)options
+- (BOOL)installWithOptions:(SentryOptions *)options
 {
-    SentryDependencyContainer *dependencies = [SentryDependencyContainer sharedInstance];
-    self.crashWrapper = dependencies.crashWrapper;
-
-    if ([self shouldBeDisabled:options]) {
-        [options removeEnabledIntegration:NSStringFromClass([self class])];
-        return;
+    if (![super installWithOptions:options]) {
+        return NO;
     }
-
-    self.appStateManager = dependencies.appStateManager;
 
     self.tracker =
-        [[SentryANRTracker alloc] initWithDelegate:self
-                             timeoutIntervalMillis:SENTRY_ANR_TRACKER_TIMEOUT_MILLIS
-                               currentDateProvider:[SentryDefaultCurrentDateProvider sharedInstance]
-                                      crashWrapper:dependencies.crashWrapper
-                              dispatchQueueWrapper:[[SentryDispatchQueueWrapper alloc] init]
-                                     threadWrapper:dependencies.threadWrapper];
-    [self.tracker start];
+        [SentryDependencyContainer.sharedInstance getANRTracker:options.appHangTimeoutInterval];
+
+    [self.tracker addListener:self];
+    self.options = options;
+
+    return YES;
 }
 
-- (BOOL)shouldBeDisabled:(SentryOptions *)options
+- (SentryIntegrationOption)integrationOptions
 {
-    if (!options.enableOutOfMemoryTracking) {
-        return YES;
-    }
-
-    // In case the debugger is attached
-    if ([self.crashWrapper isBeingTraced]) {
-        return YES;
-    }
-
-    return NO;
+    return kIntegrationOptionEnableAppHangTracking | kIntegrationOptionDebuggerNotAttached;
 }
 
 - (void)uninstall
 {
-    [self.tracker stop];
+    [self.tracker removeListener:self];
 }
 
 - (void)anrDetected
 {
-    [self.appStateManager
-        updateAppState:^(SentryAppState *appState) { appState.isANROngoing = YES; }];
+    SentryThreadInspector *threadInspector = SentrySDK.currentHub.getClient.threadInspector;
+
+    NSString *message = [NSString stringWithFormat:@"App hanging for at least %li ms.",
+                                  (long)(self.options.appHangTimeoutInterval * 1000)];
+
+    NSArray<SentryThread *> *threads = [threadInspector getCurrentThreadsWithStackTrace];
+
+    SentryEvent *event = [[SentryEvent alloc] initWithLevel:kSentryLevelError];
+    SentryException *sentryException = [[SentryException alloc] initWithValue:message
+                                                                         type:@"App Hanging"];
+    sentryException.mechanism = [[SentryMechanism alloc] initWithType:@"AppHang"];
+    sentryException.stacktrace = [threads[0] stacktrace];
+    [threads enumerateObjectsUsingBlock:^(SentryThread *_Nonnull obj, NSUInteger idx,
+        BOOL *_Nonnull stop) { obj.current = [NSNumber numberWithBool:idx == 0]; }];
+
+    event.exceptions = @[ sentryException ];
+    event.threads = threads;
+
+    [SentrySDK captureEvent:event];
 }
 
 - (void)anrStopped
 {
-    [self.appStateManager
-        updateAppState:^(SentryAppState *appState) { appState.isANROngoing = NO; }];
+    // We dont report when an ANR ends.
 }
 
 @end
-
-#endif
 
 NS_ASSUME_NONNULL_END

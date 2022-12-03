@@ -106,8 +106,13 @@ class SentrySDKTests: XCTestCase {
         XCTAssertEqual(SentryLevel.debug, options?.diagnosticLevel)
         XCTAssertEqual(true, options?.attachStacktrace)
         XCTAssertEqual(true, options?.enableAutoSessionTracking)
-        
-        assertIntegrationsInstalled(integrations: options?.integrations ?? [])
+
+        assertIntegrationsInstalled(integrations: [
+            "SentryCrashIntegration",
+            "SentryAutoBreadcrumbTrackingIntegration",
+            "SentryAutoSessionTrackingIntegration",
+            "SentryNetworkTrackingIntegration"
+        ])
     }
     
     func testStartWithConfigureOptions_NoDsn() throws {
@@ -340,38 +345,6 @@ class SentrySDKTests: XCTestCase {
         XCTAssert(span === newSpan)
     }
     
-    func testPerformanceOfConfigureScope() {
-        func buildCrumb(_ i: Int) -> Breadcrumb {
-            let crumb = Breadcrumb()
-            crumb.message = String(repeating: String(i), count: 100)
-            crumb.data = ["some": String(repeating: String(i), count: 1_000)]
-            crumb.category = String(i)
-            return crumb
-        }
-        
-        SentrySDK.start(options: ["dsn": SentrySDKTests.dsnAsString])
-        
-        SentrySDK.configureScope { scope in
-            let user = User()
-            user.email = "someone@gmail.com"
-            scope.setUser(user)
-        }
-        
-        for i in 0...100 {
-            SentrySDK.configureScope { scope in
-                scope.add(buildCrumb(i))
-            }
-        }
-        
-        self.measure {
-            for i in 0...10 {
-                SentrySDK.configureScope { scope in
-                    scope.add(buildCrumb(i))
-                }
-            }
-        }
-    }
-    
     func testInstallIntegrations() {
         let options = Options()
         options.dsn = "mine"
@@ -380,7 +353,7 @@ class SentrySDKTests: XCTestCase {
         SentrySDK.start(options: options)
         
         assertIntegrationsInstalled(integrations: ["SentryTestIntegration"])
-        let integration = SentrySDK.currentHub().installedIntegrations.firstObject
+        let integration = SentrySDK.currentHub().installedIntegrations.first
         XCTAssertTrue(integration is SentryTestIntegration)
         if let testIntegration = integration as? SentryTestIntegration {
             XCTAssertEqual(options.dsn, testIntegration.options.dsn)
@@ -394,47 +367,6 @@ class SentrySDKTests: XCTestCase {
         }
         
         assertIntegrationsInstalled(integrations: [])
-    }
-    
-    @available(tvOS 13.0, *)
-    @available(OSX 10.15, *)
-    @available(iOS 13.0, *)
-    func testMemoryFootprintOfAddingBreadcrumbs() {
-        SentrySDK.start { options in
-            options.dsn = SentrySDKTests.dsnAsString
-            options.debug = true
-            options.diagnosticLevel = SentryLevel.debug
-            options.attachStacktrace = true
-        }
-        
-        self.measure(metrics: [XCTMemoryMetric()]) {
-            for i in 0...1_000 {
-                let crumb = TestData.crumb
-                crumb.message = "\(i)"
-                SentrySDK.addBreadcrumb(crumb: crumb)
-            }
-        }
-    }
-    
-    @available(tvOS 13.0, *)
-    @available(OSX 10.15, *)
-    @available(iOS 13.0, *)
-    func testMemoryFootprintOfTransactions() {
-        SentrySDK.start { options in
-            options.dsn = SentrySDKTests.dsnAsString
-        }
-        
-        self.measure(metrics: [XCTMemoryMetric()]) {
-            for _ in 0...1_000 {
-                let trans = SentrySDK.startTransaction(name: "no leak", operation: "")
-                
-                for _ in 0...10 {
-                    let span = trans.startChild(operation: "ui.load")
-                    span.finish()
-                }
-                trans.finish()
-            }
-        }
     }
     
     func testStartSession() {
@@ -503,6 +435,16 @@ class SentrySDKTests: XCTestCase {
         XCTAssertEqual(SentrySDK.getAppStartMeasurement(), appStartMeasurement)
     }
     
+    func testSDKStartInvocations() {
+        XCTAssertEqual(0, SentrySDK.startInvocations)
+        
+        SentrySDK.start { options in
+            options.dsn = SentrySDKTests.dsnAsString
+        }
+        
+        XCTAssertEqual(1, SentrySDK.startInvocations)
+    }
+    
     func testIsEnabled() {
         XCTAssertFalse(SentrySDK.isEnabled)
         
@@ -540,12 +482,39 @@ class SentrySDKTests: XCTestCase {
         XCTAssertNotEqual(first, second)
     }
     
-    // Altough we only run this test above the below specified versions, we exped the
+    func testClose_ClearsIntegrations() {
+        SentrySDK.start { options in
+            options.dsn = SentrySDKTests.dsnAsString
+        }
+        
+        let hub = SentrySDK.currentHub()
+        SentrySDK.close()
+        XCTAssertEqual(0, hub.installedIntegrations.count)
+        assertIntegrationsInstalled(integrations: [])
+    }
+    
+    func testFlush_CallsFlushCorrectlyOnTransport() {
+        SentrySDK.start { options in
+            options.dsn = SentrySDKTests.dsnAsString
+        }
+        
+        let transport = TestTransport()
+        let client = Client(options: fixture.options)
+        Dynamic(client).transportAdapter = TestTransportAdapter(transport: transport, options: fixture.options)
+        SentrySDK.currentHub().bindClient(client)
+        
+        let flushTimeout = 10.0
+        SentrySDK.flush(timeout: flushTimeout)
+        
+        XCTAssertEqual(flushTimeout, transport.flushInvocations.first)
+    }
+    
+    // Although we only run this test above the below specified versions, we expect the
     // implementation to be thread safe
     @available(tvOS 10.0, *)
     @available(OSX 10.12, *)
     @available(iOS 10.0, *)
-    func testSetpAppStartMeasurmentConcurrently_() {
+    func testSetpAppStartMeasurementConcurrently_() {
         func setAppStartMeasurement(_ queue: DispatchQueue, _ i: Int) {
             group.enter()
             queue.async {
@@ -578,6 +547,24 @@ class SentrySDKTests: XCTestCase {
         let timestamp = self.fixture.currentDate.date().addingTimeInterval(TimeInterval(amount))
         XCTAssertEqual(timestamp, SentrySDK.getAppStartMeasurement()?.appStartTimestamp)
     }
+
+    func testMovesBreadcrumbsToPreviousBreadcrumbs() throws {
+        let options = Options()
+        options.dsn = SentrySDKTests.dsnAsString
+
+        let filemanager = try SentryFileManager(options: options, andCurrentDateProvider: TestCurrentDateProvider())
+        let observer = SentryOutOfMemoryScopeObserver(maxBreadcrumbs: 10, fileManager: filemanager)
+        let serializedBreadcrumb = TestData.crumb.serialize()
+
+        for _ in 0..<3 {
+            observer.addSerializedBreadcrumb(serializedBreadcrumb)
+        }
+
+        SentrySDK.start(options: options)
+
+        let result = filemanager.readPreviousBreadcrumbs()
+        XCTAssertEqual(result.count, 3)
+    }
     
     private func givenSdkWithHub() {
         SentrySDK.setCurrentHub(fixture.hub)
@@ -588,9 +575,10 @@ class SentrySDKTests: XCTestCase {
     }
     
     private func assertIntegrationsInstalled(integrations: [String]) {
+        XCTAssertEqual(integrations.count, SentrySDK.currentHub().installedIntegrations.count)
         integrations.forEach { integration in
             if let integrationClass = NSClassFromString(integration) {
-                XCTAssertTrue(SentrySDK.currentHub().isIntegrationInstalled(integrationClass))
+                XCTAssertTrue(SentrySDK.currentHub().isIntegrationInstalled(integrationClass), "\(integration) not installed")
             } else {
                 XCTFail("Integration \(integration) not installed.")
             }

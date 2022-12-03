@@ -9,11 +9,17 @@ class SentryCoreDataTrackerTests: XCTestCase {
         func getSut() -> SentryCoreDataTracker {
             return SentryCoreDataTracker()
         }
-        
+
         func testEntity() -> TestEntity {
             let entityDescription = NSEntityDescription()
             entityDescription.name = "TestEntity"
             return TestEntity(entity: entityDescription, insertInto: context)
+        }
+
+        func secondTestEntity() -> SecondTestEntity {
+            let entityDescription = NSEntityDescription()
+            entityDescription.name = "SecondTestEntity"
+            return SecondTestEntity(entity: entityDescription, insertInto: context)
         }
     }
     
@@ -31,9 +37,8 @@ class SentryCoreDataTrackerTests: XCTestCase {
     
     func testConstants() {
         //Test constants to make sure we don't accidentally change it
-        XCTAssertEqual(SENTRY_COREDATA_FETCH_OPERATION, "db.query")
-        XCTAssertEqual(SENTRY_COREDATA_SAVE_OPERATION, "db.transaction")
-        
+        XCTAssertEqual(SENTRY_COREDATA_FETCH_OPERATION, "db.sql.query")
+        XCTAssertEqual(SENTRY_COREDATA_SAVE_OPERATION, "db.sql.transaction")
     }
     
     func testFetchRequest() {
@@ -44,7 +49,7 @@ class SentryCoreDataTrackerTests: XCTestCase {
     func test_FetchRequest_WithPredicate() {
         let fetch = NSFetchRequest<TestEntity>(entityName: "TestEntity")
         fetch.predicate = NSPredicate(format: "field1 = %@ and field2 = %@", argumentArray: ["First Argument", 2])
-        assertRequest(fetch, expectedDescription: "SELECT 'TestEntity' WHERE field1 == \"First Argument\" AND field2 == 2")
+        assertRequest(fetch, expectedDescription: "SELECT 'TestEntity' WHERE field1 == %@ AND field2 == %@")
     }
     
     func test_FetchRequest_WithSortAscending() {
@@ -69,72 +74,72 @@ class SentryCoreDataTrackerTests: XCTestCase {
         let fetch = NSFetchRequest<TestEntity>(entityName: "TestEntity")
         fetch.predicate = NSPredicate(format: "field1 = %@", argumentArray: ["First Argument"])
         fetch.sortDescriptors = [NSSortDescriptor(key: "field1", ascending: false)]
-        assertRequest(fetch, expectedDescription: "SELECT 'TestEntity' WHERE field1 == \"First Argument\" SORT BY field1 DESCENDING")
+        assertRequest(fetch, expectedDescription: "SELECT 'TestEntity' WHERE field1 == %@ SORT BY field1 DESCENDING")
     }
     
     func test_Save_1Insert_1Entity() {
-        fixture.context.inserted = [TestEntity()]
+        fixture.context.inserted = [fixture.testEntity()]
         assertSave("INSERTED 1 'TestEntity'")
     }
     
     func test_Save_2Insert_1Entity() {
-        fixture.context.inserted = [TestEntity(), TestEntity()]
+        fixture.context.inserted = [fixture.testEntity(), fixture.testEntity()]
         assertSave("INSERTED 2 'TestEntity'")
     }
     
     func test_Save_2Insert_2Entity() {
-        fixture.context.inserted = [TestEntity(), SecondTestEntity()]
+        fixture.context.inserted = [fixture.testEntity(), fixture.secondTestEntity()]
         assertSave("INSERTED 2 items")
     }
     
     func test_Save_1Update_1Entity() {
-        fixture.context.updated = [TestEntity()]
+        fixture.context.updated = [fixture.testEntity()]
         assertSave("UPDATED 1 'TestEntity'")
     }
     
     func test_Save_2Update_1Entity() {
-        fixture.context.updated = [TestEntity(), TestEntity()]
+        fixture.context.updated = [fixture.testEntity(), fixture.testEntity()]
         assertSave("UPDATED 2 'TestEntity'")
     }
     
     func test_Save_2Update_2Entity() {
-        fixture.context.updated = [TestEntity(), SecondTestEntity()]
+        fixture.context.updated = [fixture.testEntity(), fixture.secondTestEntity()]
         assertSave("UPDATED 2 items")
     }
     
     func test_Save_1Delete_1Entity() {
-        fixture.context.deleted = [TestEntity()]
+        fixture.context.deleted = [fixture.testEntity()]
         assertSave("DELETED 1 'TestEntity'")
     }
     
     func test_Save_2Delete_1Entity() {
-        fixture.context.deleted = [TestEntity(), TestEntity()]
+        fixture.context.deleted = [fixture.testEntity(), fixture.testEntity()]
         assertSave("DELETED 2 'TestEntity'")
     }
     
     func test_Save_2Delete_2Entity() {
-        fixture.context.deleted = [TestEntity(), SecondTestEntity()]
+        fixture.context.deleted = [fixture.testEntity(), fixture.secondTestEntity()]
         assertSave("DELETED 2 items")
     }
     
     func test_Save_Insert_Update_Delete_1Entity() {
-        fixture.context.inserted = [TestEntity()]
-        fixture.context.updated = [TestEntity()]
-        fixture.context.deleted = [TestEntity()]
+        fixture.context.inserted = [fixture.testEntity()]
+        fixture.context.updated = [fixture.testEntity()]
+        fixture.context.deleted = [fixture.testEntity()]
         assertSave("INSERTED 1 'TestEntity', UPDATED 1 'TestEntity', DELETED 1 'TestEntity'")
     }
     
     func test_Save_Insert_Update_Delete_2Entity() {
-        fixture.context.inserted = [TestEntity(), SecondTestEntity()]
-        fixture.context.updated = [TestEntity(), SecondTestEntity()]
-        fixture.context.deleted = [TestEntity(), SecondTestEntity()]
+        fixture.context.inserted = [fixture.testEntity(), fixture.secondTestEntity()]
+        fixture.context.updated = [fixture.testEntity(), fixture.secondTestEntity()]
+        fixture.context.deleted = [fixture.testEntity(), fixture.secondTestEntity()]
         assertSave("INSERTED 2 items, UPDATED 2 items, DELETED 2 items")
     }
     
     func test_Operation_InData() {
-        fixture.context.inserted = [TestEntity(), TestEntity(), SecondTestEntity()]
-        fixture.context.updated = [TestEntity(), SecondTestEntity(), SecondTestEntity()]
-        fixture.context.deleted = [TestEntity(), TestEntity(), SecondTestEntity(), SecondTestEntity(), SecondTestEntity()]
+        fixture.context.inserted = [fixture.testEntity(), fixture.testEntity(), fixture.secondTestEntity()]
+        fixture.context.updated = [fixture.testEntity(), fixture.secondTestEntity(), fixture.secondTestEntity()]
+        fixture.context.deleted = [fixture.testEntity(), fixture.testEntity(), fixture.secondTestEntity(), fixture.secondTestEntity(), fixture.secondTestEntity()]
         
         let sut = fixture.getSut()
         
@@ -181,6 +186,34 @@ class SentryCoreDataTrackerTests: XCTestCase {
         XCTAssertEqual(deleted["SecondTestEntity"] as? Int, 3)
         XCTAssertEqual(updated["TestEntity"] as? Int, 1)
         XCTAssertEqual(updated["SecondTestEntity"] as? Int, 2)
+    }
+    
+    func test_Request_with_Error() {
+        let fetch = NSFetchRequest<TestEntity>(entityName: "TestEntity")
+        
+        let transaction = startTransaction()
+        let sut = fixture.getSut()
+        
+        let context = fixture.context
+        
+        let _ = try?  sut.fetchManagedObjectContext(context, request: fetch) { _, _ in
+            return nil
+        }
+        
+        XCTAssertEqual(transaction.children.count, 1)
+        XCTAssertEqual(transaction.children[0].context.status, .internalError)
+    }
+    
+    func test_save_with_Error() {
+        let transaction = startTransaction()
+        let sut = fixture.getSut()
+        fixture.context.inserted = [fixture.testEntity()]
+        try? sut.saveManagedObjectContext(fixture.context) { _ in
+            return false
+        }
+        
+        XCTAssertEqual(transaction.children.count, 1)
+        XCTAssertEqual(transaction.children[0].context.status, .internalError)
     }
     
     func test_Save_NoChanges() {

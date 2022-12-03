@@ -6,6 +6,8 @@ class ViewController: UIViewController {
     @IBOutlet weak var dsnTextField: UITextField!
     @IBOutlet weak var anrFullyBlockingButton: UIButton!
     @IBOutlet weak var anrFillingRunLoopButton: UIButton!
+    @IBOutlet weak var framesLabel: UILabel!
+    @IBOutlet weak var breadcrumbLabel: UILabel!
     
     private let dispatchQueue = DispatchQueue(label: "ViewController")
 
@@ -17,6 +19,7 @@ class ViewController: UIViewController {
             scope.setEnvironment("debug")
             scope.setTag(value: "swift", key: "language")
             scope.setExtra(value: String(describing: self), key: "currentViewController")
+
             let user = Sentry.User(userId: "1")
             user.email = "tony@example.com"
             scope.setUser(user)
@@ -27,8 +30,8 @@ class ViewController: UIViewController {
             if let data = "hello".data(using: .utf8) {
                 scope.add(Attachment(data: data, filename: "log.txt"))
             }
-            
         }
+
         // Also works
         let user = Sentry.User(userId: "1")
         user.email = "tony1@example.com"
@@ -44,6 +47,30 @@ class ViewController: UIViewController {
         }
     }
     
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        if #available(iOS 10.0, *) {
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+                self.framesLabel?.text = "Frames Total:\(PrivateSentrySDKOnly.currentScreenFrames.total) Slow:\(PrivateSentrySDKOnly.currentScreenFrames.slow) Frozen:\(PrivateSentrySDKOnly.currentScreenFrames.frozen)"
+            }
+        }
+
+        SentrySDK.configureScope { (scope) in
+            let dict = scope.serialize()
+
+            guard
+                let crumbs = dict["breadcrumbs"] as? [[String: Any]],
+                let breadcrumb = crumbs.last,
+                let data = breadcrumb["data"] as? [String: String]
+            else {
+                return
+            }
+
+            self.breadcrumbLabel.text = "{ category: \(breadcrumb["category"] ?? "nil"), parentViewController: \(data["parentViewController"] ?? "nil"), beingPresented: \(data["beingPresented"] ?? "nil"), window_isKeyWindow: \(data["window_isKeyWindow"] ?? "nil"), is_window_rootViewController: \(data["is_window_rootViewController"] ?? "nil") }"
+        }
+    }
+    
     @IBAction func addBreadcrumb(_ sender: Any) {
         let crumb = Breadcrumb(level: SentryLevel.info, category: "Debug")
         crumb.message = "tapped addBreadcrumb"
@@ -56,6 +83,21 @@ class ViewController: UIViewController {
         // Returns eventId in case of successfull processed event
         // otherwise nil
         print("\(String(describing: eventId))")
+    }
+    
+    @IBAction func uiClickTransaction(_ sender: Any) {
+        dispatchQueue.async {
+            if let path = Bundle.main.path(forResource: "LoremIpsum", ofType: "txt") {
+                _ = FileManager.default.contents(atPath: path)
+            }
+        }
+
+        guard let imgUrl = URL(string: "https://sentry-brand.storage.googleapis.com/sentry-logo-black.png") else {
+            return
+        }
+        let session = URLSession(configuration: URLSessionConfiguration.default)
+        let dataTask = session.dataTask(with: imgUrl) { (_, _, _) in }
+        dataTask.resume()
     }
     
     @IBAction func captureUserFeedback(_ sender: Any) {
@@ -89,10 +131,7 @@ class ViewController: UIViewController {
         let exception = NSException(name: NSExceptionName("My Custom exeption"), reason: "User clicked the button", userInfo: nil)
         let scope = Scope()
         scope.setLevel(.fatal)
-        // By explicity just passing the scope, only the data in this scope object will be added to the event
-        // The global scope (calls to configureScope) will be ignored
-        // Only do this if you know what you are doing, you loose a lot of useful info
-        // If you just want to mutate what's in the scope use the callback, see: captureError
+        // !!!: By explicity just passing the scope, only the data in this scope object will be added to the event; the global scope (calls to configureScope) will be ignored. If you do that, be careful–a lot of useful info is lost. If you just want to mutate what's in the scope use the callback, see: captureError.
         SentrySDK.capture(exception: exception, scope: scope)
     }
     
@@ -102,6 +141,11 @@ class ViewController: UIViewController {
     
     @IBAction func captureTransaction(_ sender: Any) {
         let transaction = SentrySDK.startTransaction(name: "Some Transaction", operation: "Some Operation")
+        
+        transaction.setMeasurement(name: "duration", value: 44, unit: MeasurementUnitDuration.nanosecond)
+        transaction.setMeasurement(name: "information", value: 44, unit: MeasurementUnitInformation.bit)
+        transaction.setMeasurement(name: "duration-custom", value: 22, unit: MeasurementUnit(unit: "custom"))
+        
         let span = transaction.startChild(operation: "user", description: "calls out")
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: {
@@ -229,5 +273,29 @@ class ViewController: UIViewController {
         let controller = CoreDataViewController()
         controller.title = "CoreData"
         navigationController?.pushViewController(controller, animated: false)
+    }
+
+    @IBAction func performanceScenarios(_ sender: Any) {
+        let controller = PerformanceViewController()
+        controller.title = "Performance Scenarios"
+        navigationController?.pushViewController(controller, animated: false)
+    }
+
+    @IBAction func permissions(_ sender: Any) {
+        let controller = PermissionsViewController()
+        controller.title = "Permissions"
+        navigationController?.pushViewController(controller, animated: true)
+    }
+    
+    @IBAction func flush(_ sender: Any) {
+        SentrySDK.flush(timeout: 5)
+    }
+    
+    @IBAction func close(_ sender: Any) {
+        SentrySDK.close()
+    }
+    
+    @IBAction func startSDK(_ sender: Any) {
+        AppDelegate.startSentry()
     }
 }

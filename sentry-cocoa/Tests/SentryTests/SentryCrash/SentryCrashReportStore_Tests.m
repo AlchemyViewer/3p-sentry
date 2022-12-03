@@ -49,6 +49,7 @@
 
 - (int64_t)getReportIDFromPath:(NSString *)path
 {
+
     const char *filename = path.lastPathComponent.UTF8String;
     char scanFormat[100];
     snprintf(
@@ -140,10 +141,30 @@
     XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:self.reportStorePath]);
 }
 
-- (void)testCrashReportCount1
+- (void)testCrashReportCount1_disabled
 {
     [self prepareReportStoreWithPathEnd:@"testCrashReportCount1"];
     NSString *reportContents = @"Testing";
+    [self writeCrashReportWithStringContents:reportContents];
+    [self expectHasReportCount:1];
+}
+
+- (void)testCrashReportCount1_WithAttachments
+{
+    [self prepareReportStoreWithPathEnd:@"testCrashReportCount1"];
+    NSString *reportContents = @"Testing";
+
+    char crashReportPath[SentryCrashCRS_MAX_PATH_LENGTH];
+    sentrycrashcrs_getNextCrashReportPath(crashReportPath);
+    NSString *pathToCrashReport = [NSString stringWithUTF8String:crashReportPath];
+    NSError *someError;
+    [NSFileManager.defaultManager
+              createDirectoryAtPath:[pathToCrashReport stringByDeletingPathExtension]
+        withIntermediateDirectories:true
+                         attributes:nil
+                              error:&someError];
+    XCTAssertNil(someError);
+
     [self writeCrashReportWithStringContents:reportContents];
     [self expectHasReportCount:1];
 }
@@ -217,6 +238,59 @@
     NSString *reportContents = @"Testing";
     int64_t reportID = [self writeCrashReportWithStringContents:reportContents];
     [self expectReports:@[ @(reportID) ] areStrings:@[ reportContents ]];
+}
+
+- (void)test_AttachmentsPath_forReportId
+{
+    self.appName = @"AppName";
+    [self prepareReportStoreWithPathEnd:@"/ReportPath"];
+    uint64_t reportId = 84568454541;
+
+    char attachmentsPath[SentryCrashCRS_MAX_PATH_LENGTH];
+    sentrycrashcrs_getAttachmentsPath_forReportId(reportId, attachmentsPath);
+
+    XCTAssertEqualObjects([NSString stringWithUTF8String:attachmentsPath],
+        [self.tempPath stringByAppendingPathComponent:
+                           @"/ReportPath/AppName-report-00000013b0ac358d-attachments"]);
+}
+
+- (void)test_AttachmentsPath_forReport
+{
+    self.appName = @"AppName";
+    [self prepareReportStoreWithPathEnd:@"/ReportPath"];
+
+    uint64_t reportId = 84568454541;
+
+    char reportPath[SentryCrashCRS_MAX_PATH_LENGTH];
+    sentrycrashcrs_getCrashReportPathById(reportId, reportPath);
+
+    char attachmentsPath[SentryCrashCRS_MAX_PATH_LENGTH];
+    sentrycrashcrs_getAttachmentsPath_forReport(reportPath, attachmentsPath);
+
+    XCTAssertEqualObjects([NSString stringWithUTF8String:attachmentsPath],
+        [self.tempPath stringByAppendingPathComponent:
+                           @"/ReportPath/AppName-report-00000013b0ac358d-attachments"]);
+}
+
+- (void)test_initializeIDs
+{
+    self.appName = @"AppName";
+
+    [self prepareReportStoreWithPathEnd:@"/ReportPath"];
+
+    char firstReportPath[SentryCrashCRS_MAX_PATH_LENGTH];
+    sentrycrashcrs_getNextCrashReportPath(firstReportPath);
+
+    // Unique Ids are created based on the time,
+    // thats why we sleep for 1 second, to see a different Id being created
+    // during initialization.
+    [NSThread sleepForTimeInterval:1];
+    [self prepareReportStoreWithPathEnd:@"/ReportPath"];
+
+    char secondReportPath[SentryCrashCRS_MAX_PATH_LENGTH];
+    sentrycrashcrs_getNextCrashReportPath(secondReportPath);
+    XCTAssertNotEqualObjects([NSString stringWithUTF8String:firstReportPath],
+        [NSString stringWithUTF8String:secondReportPath]);
 }
 
 @end

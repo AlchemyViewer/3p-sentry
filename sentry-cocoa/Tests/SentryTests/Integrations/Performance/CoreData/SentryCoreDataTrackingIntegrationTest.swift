@@ -17,12 +17,6 @@ class SentryCoreDataTrackingIntegrationTests: XCTestCase {
         func getSut() -> SentryCoreDataTrackingIntegration {
             return SentryCoreDataTrackingIntegration()
         }
-        
-        func testEntity() -> TestEntity {
-            let entityDescription = NSEntityDescription()
-            entityDescription.name = "TestEntity"
-            return TestEntity(entity: entityDescription, insertInto: nil)
-        }
     }
     
     private var fixture: Fixture!
@@ -49,15 +43,15 @@ class SentryCoreDataTrackingIntegrationTests: XCTestCase {
     }
     
     func test_Install_swizzlingDisabled() {
-        test_DontInstall { $0.enableSwizzling = false }
+        assert_DontInstall { $0.enableSwizzling = false }
     }
     
     func test_Install_autoPerformanceDisabled() {
-        test_DontInstall { $0.enableAutoPerformanceTracking = false }
+        assert_DontInstall { $0.enableAutoPerformanceTracking = false }
     }
     
     func test_Install_coreDataTrackingDisabled() {
-        test_DontInstall { $0.enableCoreDataTracking = false }
+        assert_DontInstall { $0.enableCoreDataTracking = false }
     }
     
     func test_Fetch() {
@@ -78,7 +72,7 @@ class SentryCoreDataTrackingIntegrationTests: XCTestCase {
         try? stack.managedObjectContext.save()
         
         XCTAssertEqual(transaction.children.count, 1)
-        XCTAssertEqual(transaction.children[0].context.operation, "db.transaction")
+        XCTAssertEqual(transaction.children[0].context.operation, "db.sql.transaction")
     }
     
     func test_Save_noChanges() {
@@ -112,7 +106,7 @@ class SentryCoreDataTrackingIntegrationTests: XCTestCase {
         XCTAssertEqual(transaction.children.count, 0)
     }
     
-    private func test_DontInstall(_ confOptions: ((Options) -> Void)) {
+    private func assert_DontInstall(_ confOptions: ((Options) -> Void)) {
         let sut = fixture.getSut()
         confOptions(fixture.options)
         XCTAssertNil(SentryCoreDataSwizzling.sharedInstance.middleware)

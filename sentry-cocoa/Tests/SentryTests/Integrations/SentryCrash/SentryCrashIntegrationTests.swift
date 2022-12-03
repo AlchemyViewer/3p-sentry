@@ -1,6 +1,6 @@
 import XCTest
 
-class SentryCrashIntegrationTests: XCTestCase {
+class SentryCrashIntegrationTests: NotificationCenterTestCase {
     
     private static let dsnAsString = TestConstants.dsnAsString(username: "SentryCrashIntegrationTests")
     private static let dsn = TestConstants.dsn(username: "SentryCrashIntegrationTests")
@@ -22,7 +22,7 @@ class SentryCrashIntegrationTests: XCTestCase {
             options.dsn = SentryCrashIntegrationTests.dsnAsString
             options.releaseName = TestData.appState.releaseName
             
-            let client = Client(options: options)
+            let client = Client(options: options, permissionsObserver: TestSentryPermissionsObserver())
             hub = TestHub(client: client, andScope: nil)
         }
         
@@ -38,7 +38,11 @@ class SentryCrashIntegrationTests: XCTestCase {
         }
         
         func getSut() -> SentryCrashIntegration {
-            return SentryCrashIntegration(crashAdapter: sentryCrash, andDispatchQueueWrapper: dispatchQueueWrapper)
+            return getSut(crashWrapper: sentryCrash)
+        }
+        
+        func getSut(crashWrapper: SentryCrashWrapper) -> SentryCrashIntegration {
+            return SentryCrashIntegration(crashAdapter: crashWrapper, andDispatchQueueWrapper: dispatchQueueWrapper)
         }
         
         var sutWithoutCrash: SentryCrashIntegration {
@@ -98,6 +102,16 @@ class SentryCrashIntegrationTests: XCTestCase {
         assertContext(context: context)
     }
     
+    func testSystemInfoIsEmpty() {
+        let scope = Scope()
+        SentryCrashIntegration.enrichScope(scope, crashWrapper: TestSentryCrashWrapper.sharedInstance())
+        
+        // We don't worry about the actual values
+        // This is an edge case where the user doesn't use the
+        // SentryCrashIntegration. Just make sure to not crash.
+        XCTAssertFalse(scope.contextDictionary.allValues.isEmpty)
+    }
+    
     func testEndSessionAsCrashed_WithCurrentSession() {
         let expectedCrashedSession = givenCrashedSession()
         SentrySDK.setCurrentHub(fixture.hub)
@@ -113,6 +127,7 @@ class SentryCrashIntegrationTests: XCTestCase {
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     func testEndSessionAsCrashed_WhenOOM_WithCurrentSession() {
         givenOOMAppState()
+        SentrySDK.startInvocations = 1
         
         let expectedCrashedSession = givenCrashedSession()
         
@@ -191,18 +206,18 @@ class SentryCrashIntegrationTests: XCTestCase {
         XCTAssertFalse(fixture.sentryCrash.installAsyncHooksCalled)
     }
 
-    func testUninstall_CallsDeactivateAsyncHooks() {
+    func testUninstall_CallsUninstallAsyncHooks() {
         let sut = fixture.getSut()
 
         sut.install(with: Options())
 
         sut.uninstall()
 
-        XCTAssertTrue(fixture.sentryCrash.deactivateAsyncHooksCalled)
+        XCTAssertTrue(fixture.sentryCrash.uninstallAsyncHooksCalled)
     }
     
     func testUninstall_DoesNotUpdateLocale_OnLocaleDidChangeNotification() {
-        let (sut, hub) = givenSutWithGlobalHub()
+        let (sut, hub) = givenSutWithGlobalHubAndCrashWrapper()
 
         sut.install(with: Options())
 
@@ -211,13 +226,13 @@ class SentryCrashIntegrationTests: XCTestCase {
         
         sut.uninstall()
         
-        TestNotificationCenter.localeDidChange()
+        localeDidChange()
         
         assertLocaleOnHub(locale: locale, hub: hub)
     }
     
     func testOSCorrectlySetToScopeContext() {
-        let (sut, hub) = givenSutWithGlobalHub()
+        let (sut, hub) = givenSutWithGlobalHubAndCrashWrapper()
         
         sut.install(with: Options())
         
@@ -233,21 +248,57 @@ class SentryCrashIntegrationTests: XCTestCase {
             scope.removeContext(key: "device")
         }
         
-        TestNotificationCenter.localeDidChange()
+        localeDidChange()
         
         assertLocaleOnHub(locale: Locale.autoupdatingCurrent.identifier, hub: hub)
     }
     
     func testLocaleChanged_DifferentLocale_SetsCurrentLocale() {
-        let (sut, hub) = givenSutWithGlobalHub()
+        let (sut, hub) = givenSutWithGlobalHubAndCrashWrapper()
         
         sut.install(with: Options())
         
         setLocaleToGlobalScope(locale: "garbage")
         
-        TestNotificationCenter.localeDidChange()
+        localeDidChange()
         
         assertLocaleOnHub(locale: Locale.autoupdatingCurrent.identifier, hub: hub)
+    }
+
+    // !!!: Disabled until flakiness can be fixed
+    func testStartUpCrash_CallsFlush_disabled() throws {
+        let (sut, hub) = givenSutWithGlobalHubAndCrashWrapper()
+        sut.install(with: Options())
+        
+        // Manually reset and enable the crash state because tearing down the global state in SentryCrash to achieve the same is complicated and doesn't really work.
+        let crashStatePath = String(cString: sentrycrashstate_filePath())
+        let api = sentrycrashcm_appstate_getAPI()
+        sentrycrashstate_initialize(crashStatePath)
+        api?.pointee.setEnabled(true)
+        
+        let transport = TestTransport()
+        let client = Client(options: fixture.options)
+        Dynamic(client).transportAdapter = TestTransportAdapter(transport: transport, options: fixture.options)
+        hub.bindClient(client)
+        
+        delayNonBlocking(timeout: 0.01)
+        
+        // Manually simulate a crash
+        sentrycrashstate_notifyAppCrash()
+        
+        try givenStoredSentryCrashReport(resource: "Resources/crash-report-1")
+        
+        // Force reloading of crash state
+        sentrycrashstate_initialize(sentrycrashstate_filePath())
+        // Force sending all reports, because the crash reports are only sent once after first init.
+        SentryCrashIntegration.sendAllSentryCrashReports()
+        
+        XCTAssertEqual(1, transport.flushInvocations.count)
+        XCTAssertEqual(5.0, transport.flushInvocations.first)
+        
+        // Reset and disable crash state
+        sentrycrashstate_reset()
+        api?.pointee.setEnabled(false)
     }
     
     private func givenCurrentSession() -> SentrySession {
@@ -269,11 +320,20 @@ class SentryCrashIntegrationTests: XCTestCase {
         let appState = SentryAppState(releaseName: TestData.appState.releaseName, osVersion: UIDevice.current.systemVersion, vendorId: UIDevice.current.identifierForVendor?.uuidString ?? "", isDebugging: false, systemBootTimestamp: fixture.currentDateProvider.date())
         appState.isActive = true
         fixture.fileManager.store(appState)
+        fixture.fileManager.moveAppStateToPreviousAppState()
     }
     #endif
     
     private func givenSutWithGlobalHub() -> (SentryCrashIntegration, SentryHub) {
         let sut = fixture.getSut()
+        let hub = fixture.hub
+        SentrySDK.setCurrentHub(hub)
+
+        return (sut, hub)
+    }
+    
+    private func givenSutWithGlobalHubAndCrashWrapper() -> (SentryCrashIntegration, SentryHub) {
+        let sut = fixture.getSut(crashWrapper: SentryCrashWrapper.sharedInstance())
         let hub = fixture.hub
         SentrySDK.setCurrentHub(hub)
 

@@ -1,7 +1,7 @@
 import XCTest
 
 #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-class SentryAppStartTrackingIntegrationTests: XCTestCase {
+class SentryAppStartTrackingIntegrationTests: NotificationCenterTestCase {
     
     private class Fixture {
         let options = Options()
@@ -37,7 +37,7 @@ class SentryAppStartTrackingIntegrationTests: XCTestCase {
     func testAppStartMeasuringEnabledAndSampleRate_DoesUpdatesAppState() {
         sut.install(with: fixture.options)
         
-        TestNotificationCenter.uiWindowDidBecomeVisible()
+        uiWindowDidBecomeVisible()
         
         XCTAssertNotNil(SentrySDK.getAppStartMeasurement())
     }
@@ -48,7 +48,7 @@ class SentryAppStartTrackingIntegrationTests: XCTestCase {
         options.tracesSampler = nil
         sut.install(with: options)
         
-        TestNotificationCenter.uiWindowDidBecomeVisible()
+        uiWindowDidBecomeVisible()
         
         XCTAssertNil(SentrySDK.getAppStartMeasurement())
     }
@@ -61,7 +61,7 @@ class SentryAppStartTrackingIntegrationTests: XCTestCase {
         options.tracesSampler = nil
         sut.install(with: options)
         
-        TestNotificationCenter.uiWindowDidBecomeVisible()
+        uiWindowDidBecomeVisible()
         
         XCTAssertNotNil(SentrySDK.getAppStartMeasurement())
     }
@@ -72,28 +72,27 @@ class SentryAppStartTrackingIntegrationTests: XCTestCase {
         options.tracesSampler = nil
         sut.install(with: options)
         
-        TestNotificationCenter.uiWindowDidBecomeVisible()
+        uiWindowDidBecomeVisible()
         
         XCTAssertNil(SentrySDK.getAppStartMeasurement())
     }
     
-    func testAutoUIPerformanceTrackingDisabled_DoesNotUpdatesAppState() {
+    func testAutoPerformanceTrackingDisabled_DoesNotUpdatesAppState() {
         let options = fixture.options
         options.enableAutoPerformanceTracking = false
         sut.install(with: options)
         
-        TestNotificationCenter.uiWindowDidBecomeVisible()
+        uiWindowDidBecomeVisible()
         
         XCTAssertNil(SentrySDK.getAppStartMeasurement())
     }
     
-    func test_PerformanceTrackingDisabled_RemovesEnabledIntegration() {
+    func test_PerformanceTrackingDisabled() {
         let options = fixture.options
         options.enableAutoPerformanceTracking = false
-        sut.install(with: options)
+        let result = sut.install(with: options)
         
-        let expexted = Options.defaultIntegrations().filter { !$0.contains("AppStart") }
-        assertArrayEquals(expected: expexted, actual: Array(options.enabledIntegrations))
+        XCTAssertFalse(result)
     }
     
 }
