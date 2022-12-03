@@ -38,7 +38,7 @@ case "$AUTOBUILD_PLATFORM" in
             mkdir -p "build_release"
             pushd "build_release"
                 # Invoke cmake and use as official build
-                cmake -G "$AUTOBUILD_WIN_CMAKE_GEN" -A "$AUTOBUILD_WIN_VSPLATFORM" -T host="$AUTOBUILD_WIN_VSHOST" .. \
+                cmake -G "$AUTOBUILD_WIN_CMAKE_GEN" -A "$AUTOBUILD_WIN_VSPLATFORM" .. \
                     -DCMAKE_CXX_STANDARD=17 \
                     -DCMAKE_INSTALL_PREFIX=$(cygpath -w "$stage/sentry")
 
