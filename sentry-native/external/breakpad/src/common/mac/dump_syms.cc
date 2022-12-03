@@ -1,7 +1,6 @@
 // -*- mode: c++ -*-
 
-// Copyright (c) 2011, Google Inc.
-// All rights reserved.
+// Copyright 2011 Google LLC
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -13,7 +12,7 @@
 // copyright notice, this list of conditions and the following disclaimer
 // in the documentation and/or other materials provided with the
 // distribution.
-//     * Neither the name of Google Inc. nor the names of its
+//     * Neither the name of Google LLC nor the names of its
 // contributors may be used to endorse or promote products derived from
 // this software without specific prior written permission.
 //
@@ -121,6 +120,7 @@ vector<string> list_directory(const string& directory) {
 namespace google_breakpad {
 
 bool DumpSymbols::Read(const string& filename) {
+  selected_object_file_ = nullptr;
   struct stat st;
   if (stat(filename.c_str(), &st) == -1) {
     fprintf(stderr, "Could not access object file %s: %s\n",
@@ -412,6 +412,13 @@ bool DumpSymbols::CreateEmptyModule(scoped_ptr<Module>& module) {
   const NXArchInfo* selected_arch_info =
       google_breakpad::BreakpadGetArchInfoFromCpuType(
           selected_object_file_->cputype, selected_object_file_->cpusubtype);
+
+  // In certain cases, it is possible that architecture info can't be reliably
+  // determined, e.g. new architectures that breakpad is unware of. In that
+  // case, avoid crashing and return false instead.
+  if (selected_arch_info == NULL) {
+    return false;
+  }
 
   const char* selected_arch_name = selected_arch_info->name;
   if (strcmp(selected_arch_name, "i386") == 0)
