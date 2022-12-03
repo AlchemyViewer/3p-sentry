@@ -12,7 +12,7 @@ class TestData {
         }
     }
     static let sdk = ["name": SentryMeta.sdkName, "version": SentryMeta.versionString]
-    static let context = ["context": ["c": "a"]]
+    static let context = ["context": ["c": "a", "date": timestamp]]
     
     static var crumb: Breadcrumb {
         let crumb = Breadcrumb()
@@ -50,6 +50,7 @@ class TestData {
         event.transaction = "transaction"
         event.type = "type"
         event.user = user
+        event.request = request
         
         return event
     }
@@ -59,6 +60,7 @@ class TestData {
         user.email = "user@sentry.io"
         user.username = "user123"
         user.ipAddress = "127.0.0.1"
+        user.segment = "segmentA"
         user.data = ["some": ["data": "data", "date": timestamp]]
         
         return user
@@ -130,6 +132,7 @@ class TestData {
     
     static var stacktrace: Stacktrace {
         let stacktrace = Stacktrace(frames: [frame], registers: ["register": "one"])
+        stacktrace.snapshot = true
         return stacktrace
     }
     
@@ -198,7 +201,7 @@ class TestData {
         let crumb1 = TestData.crumb
         crumb1.message = "Crumb 1"
         scope.add(crumb1)
-
+        
         let crumb2 = TestData.crumb
         crumb2.message = "Crumb 2"
         scope.add(crumb2)
@@ -218,27 +221,25 @@ class TestData {
         scope.setContext(value: TestData.context["context"]!, key: "context")
     }
     
-    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-    private static var maximumFramesPerSecond: Int {
-        if #available(iOS 10.3, tvOS 10.3, macCatalyst 13.0, *) {
-            return UIScreen.main.maximumFramesPerSecond
-        } else {
-            return 60
-        }
+    static var request: SentryRequest {
+        let request = SentryRequest()
+        request.url = "https://sentry.io"
+        request.fragment = "fragment"
+        request.bodySize = 10
+        request.queryString = "query"
+        request.cookies = "cookies"
+        request.method = "GET"
+        request.headers = ["header": "value"]
+        
+        return request
     }
-    
-    static var slowFrameThreshold: Double {
-        return 1 / (Double(maximumFramesPerSecond) - 1.0)
-    }
-    
-    static let frozenFrameThreshold = 0.7
-    #endif
     
     static func getAppStartMeasurement(type: SentryAppStartType, appStartTimestamp: Date = TestData.timestamp) -> SentryAppStartMeasurement {
         let appStartDuration = 0.5
-        let runtimeInit = appStartTimestamp.addingTimeInterval(0.2)
+        let main = appStartTimestamp.addingTimeInterval(0.15)
+        let runtimeInit = appStartTimestamp.addingTimeInterval(0.05)
         let didFinishLaunching = appStartTimestamp.addingTimeInterval(0.3)
         
-        return SentryAppStartMeasurement(type: type, appStartTimestamp: appStartTimestamp, duration: appStartDuration, runtimeInitTimestamp: runtimeInit, didFinishLaunchingTimestamp: didFinishLaunching)
+        return SentryAppStartMeasurement(type: type, isPreWarmed: false, appStartTimestamp: appStartTimestamp, duration: appStartDuration, runtimeInitTimestamp: runtimeInit, moduleInitializationTimestamp: main, didFinishLaunchingTimestamp: didFinishLaunching)
     }
 }

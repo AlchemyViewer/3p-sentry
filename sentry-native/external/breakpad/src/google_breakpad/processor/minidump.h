@@ -1,5 +1,4 @@
-// Copyright (c) 2010 Google Inc.
-// All rights reserved.
+// Copyright 2010 Google LLC
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -11,7 +10,7 @@
 // copyright notice, this list of conditions and the following disclaimer
 // in the documentation and/or other materials provided with the
 // distribution.
-//     * Neither the name of Google Inc. nor the names of its
+//     * Neither the name of Google LLC nor the names of its
 // contributors may be used to endorse or promote products derived from
 // this software without specific prior written permission.
 //
@@ -370,6 +369,86 @@ class MinidumpThreadList : public MinidumpStream {
   DISALLOW_COPY_AND_ASSIGN(MinidumpThreadList);
 };
 
+// MinidumpThreadName contains the name of a thread.
+class MinidumpThreadName : public MinidumpObject {
+ public:
+  virtual ~MinidumpThreadName();
+
+  const MDRawThreadName* thread_name() const {
+    return valid_ ? &thread_name_ : NULL;
+  }
+
+  // Gets the thread ID.
+  virtual bool GetThreadID(uint32_t* thread_id) const;
+
+  // Print a human-readable representation of the object to stdout.
+  void Print();
+
+  // Returns the name of the thread.
+  virtual std::string GetThreadName() const;
+
+ protected:
+  explicit MinidumpThreadName(Minidump* minidump);
+
+ private:
+  // These objects are managed by MinidumpThreadNameList.
+  friend class MinidumpThreadNameList;
+
+  // This works like MinidumpStream::Read, but is driven by
+  // MinidumpThreadNameList.  No size checking is done, because
+  // MinidumpThreadNameList handles that directly.
+  bool Read();
+
+  // Reads indirectly-referenced data, including the thread name.
+  bool ReadAuxiliaryData();
+
+  // True after a successful Read.  This is different from valid_, which is not
+  // set true until ReadAuxiliaryData also completes successfully.
+  // thread_name_valid_ is only used by ReadAuxiliaryData and the functions it
+  // calls to determine whether the object is ready for auxiliary data to be
+  // read.
+  bool thread_name_valid_;
+
+  MDRawThreadName thread_name_;
+
+  // Cached thread name.
+  const string* name_;
+};
+
+// MinidumpThreadNameList contains all of the names of the threads (as
+// MinidumpThreadNames) in a process.
+class MinidumpThreadNameList : public MinidumpStream {
+ public:
+  virtual ~MinidumpThreadNameList();
+
+  virtual unsigned int thread_name_count() const {
+    return valid_ ? thread_name_count_ : 0;
+  }
+
+  // Sequential access to thread names.
+  virtual MinidumpThreadName* GetThreadNameAtIndex(unsigned int index) const;
+
+  // Print a human-readable representation of the object to stdout.
+  void Print();
+
+ protected:
+  explicit MinidumpThreadNameList(Minidump* aMinidump);
+
+ private:
+  friend class Minidump;
+
+  typedef vector<MinidumpThreadName> MinidumpThreadNames;
+
+  static const uint32_t kStreamType = MD_THREAD_NAME_LIST_STREAM;
+
+  bool Read(uint32_t aExpectedSize) override;
+
+  // The list of thread names.
+  MinidumpThreadNames* thread_names_;
+  uint32_t thread_name_count_;
+
+  DISALLOW_COPY_AND_ASSIGN(MinidumpThreadNameList);
+};
 
 // MinidumpModule wraps MDRawModule, which contains information about loaded
 // code modules.  Access is provided to various data referenced indirectly
@@ -1188,6 +1267,7 @@ class Minidump {
   // to avoid exposing an ugly API (GetStream needs to accept a garbage
   // parameter).
   virtual MinidumpThreadList* GetThreadList();
+  virtual MinidumpThreadNameList* GetThreadNameList();
   virtual MinidumpModuleList* GetModuleList();
   virtual MinidumpMemoryList* GetMemoryList();
   virtual MinidumpException* GetException();

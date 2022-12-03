@@ -1,4 +1,5 @@
 #import "SentryDefines.h"
+#import "SentryInternalDefines.h"
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -12,15 +13,27 @@ SENTRY_NO_INIT
 
 - (BOOL)crashedLastLaunch;
 
+- (NSTimeInterval)durationFromCrashStateInitToLastCrash;
+
 - (NSTimeInterval)activeDurationSinceLastCrash;
 
 - (BOOL)isBeingTraced;
+
+- (BOOL)isSimulatorBuild;
 
 - (BOOL)isApplicationInForeground;
 
 - (void)installAsyncHooks;
 
-- (void)deactivateAsyncHooks;
+- (void)uninstallAsyncHooks;
+
+- (NSDictionary *)systemInfo;
+
+- (bytes)freeMemorySize;
+
+- (bytes)appMemorySize;
+
+- (bytes)freeStorageSize;
 
 @end
 

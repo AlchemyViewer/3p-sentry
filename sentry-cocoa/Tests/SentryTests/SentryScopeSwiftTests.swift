@@ -238,6 +238,35 @@ class SentryScopeSwiftTests: XCTestCase {
         XCTAssertEqual(context as? [String: [String: String]],
                        actual?.context as? [String: [String: String]])
     }
+    
+    func testApplyToEvent_EventWithContext_MergesContext() {
+        let context = NSMutableDictionary(dictionary: [
+            "first": ["a": "b", "c": "d"]])
+        let event = fixture.event
+        event.context = context as? [String: [String: String]]
+        
+        let expectedAppContext = [
+            "first": [ "a": "b", "c": "d", "e": "f"],
+            "second": ["0": "1" ]
+        ]
+        
+        // The existing values from the scope get overwritten by the values of the event
+        // "a": [12:1] will be overwritten with "a": "b"
+        // "c": "c" will be overwritten with "c": "d"
+        // "e": "f" gets added from the scope to the event
+        let scope = fixture.scope
+        scope.setContext(value: ["a": [12: 1], "c": "c", "e": "f"], key: "first")
+        scope.setContext(value: ["0": "1"], key: "second")
+        
+        let actual = scope.apply(to: event, maxBreadcrumb: 10)
+        let actualContext = actual?.context as? [String: [String: String]]
+        
+        context.addEntries(from: fixture.context)
+        context.addEntries(from: expectedAppContext)
+        
+        XCTAssertEqual(context as? [String: [String: String]],
+                       actualContext)
+    }
         
     func testClear() {
         let scope = fixture.scope
@@ -286,7 +315,7 @@ class SentryScopeSwiftTests: XCTestCase {
         }
     }
     
-    // Altough we only run this test above the below specified versions, we exped the
+    // Although we only run this test above the below specified versions, we expect the
     // implementation to be thread safe
     // With this test we test if modifications from multiple threads don't lead to a crash.
     @available(tvOS 10.0, *)
@@ -455,7 +484,10 @@ class SentryScopeSwiftTests: XCTestCase {
         sut.add(crumb)
         sut.add(crumb)
         
-        XCTAssertEqual([crumb, crumb], observer.crumbs)
+        XCTAssertEqual(
+            [crumb.serialize() as! [String: AnyHashable], crumb.serialize() as! [String: AnyHashable]],
+            observer.crumbs
+        )
     }
     
     func testScopeObserver_clearBreadcrumb() {
@@ -516,11 +548,11 @@ class SentryScopeSwiftTests: XCTestCase {
             self.level = level
         }
         
-        var crumbs: [Breadcrumb] = []
-        func add(_ crumb: Breadcrumb) {
-            crumbs.append(crumb)
+        var crumbs: [[String: AnyHashable]] = []
+        func addSerializedBreadcrumb(_ crumb: [String: Any]) {
+            crumbs.append(crumb as! [String: AnyHashable])
         }
-        
+
         var clearBreadcrumbInvocations = 0
         func clearBreadcrumbs() {
             clearBreadcrumbInvocations += 1

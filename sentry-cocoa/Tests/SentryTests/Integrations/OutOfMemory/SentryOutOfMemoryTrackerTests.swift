@@ -1,7 +1,7 @@
 import XCTest
 
 #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-class SentryOutOfMemoryTrackerTests: XCTestCase {
+class SentryOutOfMemoryTrackerTests: NotificationCenterTestCase {
     
     private static let dsnAsString = TestConstants.dsnAsString(username: "SentryOutOfMemoryTrackerTests")
     private static let dsn = TestConstants.dsn(username: "SentryOutOfMemoryTrackerTests")
@@ -18,6 +18,7 @@ class SentryOutOfMemoryTrackerTests: XCTestCase {
         
         init() {
             options = Options()
+            options.maxBreadcrumbs = 2
             options.dsn = SentryOutOfMemoryTrackerTests.dsnAsString
             options.releaseName = TestData.appState.releaseName
             
@@ -36,7 +37,7 @@ class SentryOutOfMemoryTrackerTests: XCTestCase {
         }
         
         func getSut(fileManager: SentryFileManager) -> SentryOutOfMemoryTracker {
-            let appStateManager = SentryAppStateManager(options: options, crashWrapper: crashWrapper, fileManager: fileManager, currentDateProvider: currentDate, sysctl: sysctl)
+            let appStateManager = SentryAppStateManager(options: options, crashWrapper: crashWrapper, fileManager: fileManager, currentDateProvider: currentDate, sysctl: sysctl, dispatchQueueWrapper: self.dispatchQueue)
             let logic = SentryOutOfMemoryLogic(options: options, crashAdapter: crashWrapper, appStateManager: appStateManager)
             return SentryOutOfMemoryTracker(options: options, outOfMemoryLogic: logic, appStateManager: appStateManager, dispatchQueueWrapper: dispatchQueue, fileManager: fileManager)
         }
@@ -50,6 +51,7 @@ class SentryOutOfMemoryTrackerTests: XCTestCase {
         
         fixture = Fixture()
         sut = fixture.getSut()
+        SentrySDK.startInvocations = 1
     }
     
     override func tearDown() {
@@ -61,6 +63,8 @@ class SentryOutOfMemoryTrackerTests: XCTestCase {
     }
 
     func testStart_StoresAppState() {
+        XCTAssertNil(fixture.fileManager.readAppState())
+
         sut.start()
         
         let actual = fixture.fileManager.readAppState()
@@ -129,6 +133,19 @@ class SentryOutOfMemoryTrackerTests: XCTestCase {
         assertNoOOMSent()
     }
     
+    func testIsSimulatorBuild_NoOOM() {
+        fixture.crashWrapper.internalIsSimulatorBuild = true
+        sut.start()
+        
+        goToForeground()
+        goToBackground()
+        terminateApp()
+        
+        sut.start()
+        
+        assertNoOOMSent()
+    }
+    
     func testTerminatedNormally_NoOOM() {
         sut.start()
         goToForeground()
@@ -162,14 +179,24 @@ class SentryOutOfMemoryTrackerTests: XCTestCase {
         assertNoOOMSent()
     }
     
+    func testSDKStartedTwice_NoOOM() {
+        sut.start()
+        goToForeground()
+
+        SentrySDK.startInvocations = 2
+        sut.start()
+        assertNoOOMSent()
+    }
+    
     func testAppWasInForeground_OOM() {
         sut.start()
         goToForeground()
 
+        fixture.fileManager.moveAppStateToPreviousAppState()
         sut.start()
         assertOOMEventSent()
     }
-    
+
     func testANR_NoOOM() {
         sut.start()
         goToForeground()
@@ -181,11 +208,33 @@ class SentryOutOfMemoryTrackerTests: XCTestCase {
         sut.start()
         assertNoOOMSent()
     }
-    
+
+    func testAppOOM_WithBreadcrumbs() {
+        let breadcrumb = TestData.crumb
+
+        let sentryOutOfMemoryScopeObserver = SentryOutOfMemoryScopeObserver(maxBreadcrumbs: Int(fixture.options.maxBreadcrumbs), fileManager: fixture.fileManager)
+
+        for _ in 0..<3 {
+            sentryOutOfMemoryScopeObserver.addSerializedBreadcrumb(breadcrumb.serialize())
+        }
+
+        sut.start()
+        goToForeground()
+
+        fixture.fileManager.moveAppStateToPreviousAppState()
+        fixture.fileManager.moveBreadcrumbsToPreviousBreadcrumbs()
+        sut.start()
+        assertOOMEventSent(expectedBreadcrumbs: 2)
+
+        let crashEvent = fixture.client.captureCrashEventInvocations.first?.event
+        XCTAssertEqual(crashEvent?.timestamp, breadcrumb.timestamp)
+    }
+
     func testAppOOM_WithOnlyHybridSdkDidBecomeActive() {
         sut.start()
-        TestNotificationCenter.hybridSdkDidBecomeActive()
-        
+        hybridSdkDidBecomeActive()
+
+        fixture.fileManager.moveAppStateToPreviousAppState()
         sut.start()
         assertOOMEventSent()
     }
@@ -193,17 +242,19 @@ class SentryOutOfMemoryTrackerTests: XCTestCase {
     func testAppOOM_Foreground_And_HybridSdkDidBecomeActive() {
         sut.start()
         goToForeground()
-        TestNotificationCenter.hybridSdkDidBecomeActive()
-        
+        hybridSdkDidBecomeActive()
+
+        fixture.fileManager.moveAppStateToPreviousAppState()
         sut.start()
         assertOOMEventSent()
     }
     
     func testAppOOM_HybridSdkDidBecomeActive_and_Foreground() {
         sut.start()
-        TestNotificationCenter.hybridSdkDidBecomeActive()
+        hybridSdkDidBecomeActive()
         goToForeground()
-        
+
+        fixture.fileManager.moveAppStateToPreviousAppState()
         sut.start()
         assertOOMEventSent()
     }
@@ -211,7 +262,7 @@ class SentryOutOfMemoryTrackerTests: XCTestCase {
     func testTerminateApp_RunsOnMainThread() {
         sut.start()
         
-        TestNotificationCenter.willTerminate()
+        willTerminate()
         
         // 1 for start
         XCTAssertEqual(1, fixture.dispatchQueue.dispatchAsyncCalled)
@@ -230,15 +281,15 @@ class SentryOutOfMemoryTrackerTests: XCTestCase {
     func testStop_StopsObserving_NoMoreFileManagerInvocations() throws {
         let fileManager = try TestFileManager(options: Options(), andCurrentDateProvider: TestCurrentDateProvider())
         sut = fixture.getSut(fileManager: fileManager)
-        
+
         sut.start()
         sut.stop()
         
-        TestNotificationCenter.hybridSdkDidBecomeActive()
+        hybridSdkDidBecomeActive()
         goToForeground()
         terminateApp()
         
-        XCTAssertEqual(1, fileManager.readAppStateInvocations.count)
+        XCTAssertEqual(1, fileManager.readPreviousAppStateInvocations.count)
     }
     
     private func givenPreviousAppState(appState: SentryAppState) {
@@ -252,27 +303,13 @@ class SentryOutOfMemoryTrackerTests: XCTestCase {
         }
     }
     
-    private func goToForeground() {
-        TestNotificationCenter.willEnterForeground()
-        TestNotificationCenter.didBecomeActive()
-    }
-    
-    private func goToBackground() {
-        TestNotificationCenter.willResignActive()
-        TestNotificationCenter.didEnterBackground()
-    }
-    
-    private func terminateApp() {
-        TestNotificationCenter.willTerminate()
-        sut.stop()
-    }
-    
-    private func assertOOMEventSent() {
+    private func assertOOMEventSent(expectedBreadcrumbs: Int = 0) {
         XCTAssertEqual(1, fixture.client.captureCrashEventInvocations.count)
         let crashEvent = fixture.client.captureCrashEventInvocations.first?.event
         
         XCTAssertEqual(SentryLevel.fatal, crashEvent?.level)
-        XCTAssertEqual([], crashEvent?.breadcrumbs)
+        XCTAssertEqual(crashEvent?.breadcrumbs?.count, 0)
+        XCTAssertEqual(crashEvent?.serializedBreadcrumbs?.count, expectedBreadcrumbs)
         
         XCTAssertEqual(1, crashEvent?.exceptions?.count)
         
@@ -284,7 +321,7 @@ class SentryOutOfMemoryTrackerTests: XCTestCase {
         XCTAssertEqual(false, exception?.mechanism?.handled)
         XCTAssertEqual("out_of_memory", exception?.mechanism?.type)
     }
-    
+
     private func assertNoOOMSent() {
         XCTAssertEqual(0, fixture.client.captureCrashEventInvocations.count)
     }

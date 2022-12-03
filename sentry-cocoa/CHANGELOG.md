@@ -1,6 +1,346 @@
 # Changelog
 
+## 7.31.3
+
+### Fixes
+
+- Reporting crashes when restarting the SDK (#2440)
+- Core data span status with error (#2439)
+
+## 7.31.2
+
+### Fixes
+
+- Crash in Client when reading integrations (#2398)
+- Don't update session for dropped events (#2374)
+
+## 7.31.1
+
+### Fixes
+
+- Set the correct OOM event timestamp (#2394)
+
+## 7.31.0
+
+### Features
+
+- Store breadcrumbs to disk for OOM events (#2347)
+- Report pre-warmed app starts (#1969)
+
+### Fixes
+
+- Too long flush duration (#2370)
+- Do not delete the app state when OOM tracking is disabled. The app state is needed to determine the app start type on the next app start. (#2382)
+
+## 7.30.2
+
+### Fixes
+
+- Call UIDevice methods on the main thread (#2369)
+- Avoid sending profiles with 0 samples or incorrectly deduplicated backtrace elements (#2375)
+
+## 7.30.1
+
+### Fixes
+
+- Fix issue with invalid profiles uploading (#2358 and #2359)
+
+## 7.30.0
+
+### Features
+
+- Profile concurrent transactions (#2227)
+- HTTP Client errors (#2308)
+- Disable bitcode for Carthage distribution (#2341)
+
+### Fixes
+
+- Stop profiler when app moves to background (#2331)
+- Clean up old envelopes (#2322)
+- Crash when starting a profile from a non-main thread (#2345)
+- SentryCrash writing nan for invalid number (#2348)
+
+## 7.29.0
+
+### Features
+
+- Offline caching improvements (#2263)
+- Report usage of stitchAsyncCode (#2281)
+
+### Fixes
+
+- Enable bitcode (#2307)
+- Fix moving app state to previous app state (#2321)
+- Use CoreData entity names instead of "NSManagedObject" (#2329)
+
+## 7.28.0
+
+### Features
+
+- [Custom measurements API](https://docs.sentry.io/platforms/apple/performance/instrumentation/custom-instrumentation/) (#2268)
+
+### Fixes
+
+- Device info details for profiling (#2205)
+
+### Performance Improvements
+
+- Use double-checked lock for flush (#2290)
+
+## 7.27.1
+
+### Fixes
+
+- Add app start measurement to first finished transaction (#2252)
+- Return SentryNoOpSpan when starting a child on a finished transaction (#2239)
+- Fix profiling timestamps for slow/frozen frames (#2226)
+
+## 7.27.0
+
+### Features
+
+- Report [start up crashes](https://docs.sentry.io/platforms/apple/guides/ios/) (#2220)
+- Add segment property to user (#2234)
+- Support tracePropagationTargets (#2217)
+
+### Fixes
+
+- Correctly attribute enterprise builds (#2235)
+
+## 7.26.0
+
+### Features
+
+- [Core Data Tracking](https://docs.sentry.io/platforms/apple/performance/instrumentation/automatic-instrumentation/#core-data-tracking) is stable (#2213)
+- [File I/O Tracking](https://docs.sentry.io/platforms/apple/performance/instrumentation/automatic-instrumentation/#file-io-tracking) is stable (#2212)
+- Add flush (#2140)
+- Add more device context (#2190)
+
+### Fixes
+
+- Sentry-trace header incorrectly assigned to http requests (#2167)
+- Use the `component` name source for SentryPerformanceTracker (#2168)
+- Add support for arm64 architecture to the device context (#2185)
+- Align core data span operations (#2222)
+
+## 7.25.1
+
+### Performance Improvements
+
+- Prewarmed app start detection (#2151)
+
+## 7.25.0
+
+### Features
+
+- Users can [customize the error description](https://docs.sentry.io/platforms/apple/usage/#customizing-error-descriptions) shown in the Sentry UI by providing an NSDebugDescriptionErrorKey value in the error user info dictionary. (#2120)
+- Add support for dynamic library (#1726)
+
+### Fixes
+
+- Can't find app image when swizzling (#2124)
+- Crash with screenshot is reported twice (#2134)
+- Setting SDK name through `options[sdk][name]` shouldn't clear version (#2139)
+
+## 7.24.1
+
+### Fixes
+
+- Remove Media Library Permission check from permission observer (#2123)
+
+## 7.24.0
+
+### Features
+
+- App permissions are now also included when running from an app extension (#2106)
+- Report App Memory Usage (#2027)
+- Include app permissions with event (#1984)
+- Add culture context to event (#2036)
+- Attach view hierarchy to events (#2044)
+- Clean up SentryOptions: added `enableCrashHandler` and deprecated `integrations` (#2049)
+- Integrations send the [transaction name source](https://develop.sentry.dev/sdk/event-payloads/transaction/#transaction-annotations) (#2076)
+- Added extra logs when creating automatic transactions and spans (#2087)
+
+### Fixes
+
+- Fix Swift 5.5 compatibility (#2060)
+- Add span finish flag (#2059)
+- SentryUser.userId should be nullable (#2071)
+- Send time zone name, not abbreviation (#2091)
+- Use a prime number for the profiler's sampling rate to reduce the potential for [lock-step](https://stackoverflow.com/a/45471031) issues (#2055).
+- Improve App Hangs detection (#2100)
+- Send `environment` set from `SentryOptions` or `configureScope` with profiling data (#2095)
+
+## 7.24.0-beta.0
+
+### Features
+
+- Report App Memory Usage (#2027)
+- Include app permissions with event (#1984)
+- Add culture context to event (#2036)
+- Attach view hierarchy to events (#2044)
+- Clean up SentryOptions: added `enableCrashHandler` and deprecated `integrations` (#2049)
+- Integrations send the [transaction name source](https://develop.sentry.dev/sdk/event-payloads/transaction/#transaction-annotations) (#2076)
+- Added extra logs when creating automatic transactions and spans (#2087)
+
+### Fixes
+
+- Fix Swift 5.5 compatibility (#2060)
+- Add span finish flag (#2059)
+- SentryUser.userId should be nullable (#2071)
+- Send time zone name, not abbreviation (#2091)
+- Use a prime number for the profiler's sampling rate to reduce the potential for [lock-step](https://stackoverflow.com/a/45471031) issues (#2055).
+- Improve App Hangs detection (#2100)
+- Send `environment` set from `SentryOptions` or `configureScope` with profiling data (#2095)
+
+## 7.23.0
+
+### Features
+
+- Add sampling configuration for profiling (#2004)
+- Add transaction to baggage and trace headers (#1992)
+
+### Fixes
+
+- Log empty samples instead of collecting stacks for idle threads (#2013)
+- Remove logging that could occur while a thread is suspended (#2014)
+- Handle failure to read thread priority gracefully (#2015)
+- Fix address sanitizer compilation error (#1996)
+
+## 7.22.0
+
+### Features
+
+- Read free_memory when the event is captured, not only at SDK startup (#1962)
+- Provide private access to SentryOptions for hybrid SDKs (#1991)
+
+### Fixes
+
+- Remove Sentry keys from cached HTTP request headers (#1975)
+- Collect samples for idle threads in iOS profiler (#1978)
+- Fix removeNonSdkFrames working incorrectly for os users named sentry(#2002)
+- Don't override already-set timestamp when finishing Span (#1993)
+- Respect existing baggage header instead of overwriting it (#1995)
+
+## 7.21.0
+
+### Features
+
+- Enhance the UIViewController breadcrumbs with more data (#1945)
+- feat: Add extra app start span (#1952)
+- Add enableAutoBreadcrumbTracking option (#1958)
+- Automatic nest spans with the UI life cycle (#1959)
+- Upload frame rendering timestamps to correlate to sampled backtraces (#1910)
+- Remove PII from auto-generated core data spans (#1982)
+
+### Fixes
+
+- Don't track OOMs for simulators (#1970)
+- Properly sanitize the event context and SDK information (#1943)
+- Don't send error 429 as `network_error` (#1957)
+- Sanitize Span data (#1963)
+- Deprecate not needed option `sdkInfo` (#1960)
+- Crash in profiling logger (#1964)
+
+## 7.20.0
+
+### Features
+
+- Add screenshot at crash (#1920)
+- Track timezone changes as breadcrumbs (#1930)
+- Add sample rate in the baggage header, remove Userid and Transaction (#1936)
+
+## 7.19.0
+
+### Features
+
+- Add main thread ID to profiling payload (#1918)
+- Add App Hangs tracking (#1906)
+
+### Fixes
+
+- Remove WebKit optimization check (#1921)
+- Detect prewarmed starts with env variable (#1927)
+
+## 7.18.1
+
+### Fixes
+
+- Fix high percentage of slow frames (#1915)
+
+## 7.18.0
+
+### Features
+
+- Replace tracestate header with baggage (#1867)
+
+### Fixes
+
+- Discard long-lasting auto-generated transactions (#1903)
+- Unset scope span when finishing idle transaction (#1902)
+- Set max app start duration to 60s (#1899)
+- Screenshot wrongly attached in crash events (#1901)
+
+## 7.17.0
+
+### Features
+
+- Implement description for SentryBreadcrumb (#1880)
+
+### Fixes
+
+- Propagate configured SDK info from options to events (#1853)
+- Stop reporting pre warmed app starts (#1896)
+
+## 7.16.1
+
+### Fixes
+
+- Fix reporting wrong OOM when starting SDK twice (#1878)
+- Fix JSON conversion error message (#1856)
+- Transaction tag and data serialization (#1826)
+
+## 7.16.0
+
+### Features
+
+- UI event transactions for clicks (#1784)
+- Collect queue label information for profiles (#1828)
+- Use the macho format for debug information in Profiling (#1830)
+- Allow partial SDK info override (#1816)
+
+### Fixes
+
+- Hub uses its scope (#1821)
+
+## 7.15.0
+
+### Features
+
+- Add profile data category for rate limiting (#1799)
+- Allow setting SDK info with Options initWithDict (#1793)
+- Remove ViewController name match for swizzling (#1802)
+
+### Fixes
+
+- Apply patch for SentryCrashCachedData (#1790)
+- Fix getting class data mask in SentryCrash (#1788)
+- Use pod_target_xcconfig for Podspec #1792
+- Case sensitive header import error (#1794)
+- Parsing of output from backtrace_symbols() (#1782)
+
+## 7.14.0
+
+- fix: User feedback crash (#1766)
+- feat: Attach screenshots for errors (#1751)
+- fix: Remove authenticated pointer stripping for iOS backtraces (#1757)
+- perf: Filter binary images on Sentry Crash (#1767)
+- fix: NSURL warning during SDK initialization (#1764)
+
 ## 7.13.0
+
+If you are using self-hosted Sentry, this version requires Sentry version >= [21.9.0](https://github.com/getsentry/relay/blob/master/CHANGELOG.md#2190)
+to work or you have to manually disable sending client reports via the `sendClientReports` option.
 
 - feat: Add Client Reports (#1733)
 - fix: enableProfiling option via initWithDict (#1743)
@@ -11,6 +351,8 @@
 
 This release contains a fix for the sampling of transactions. The SDK applied both sample rates for events and transactions when capturing transactions. Previously, when setting sampleRate to 0.0, the SDK would discard all transactions.
 This is fixed now by ignoring the sampleRate for transactions. If you use custom values for sampleRate and traceSampleRate or traceSampler, this change will have an impact on you.
+
+If you are using profiling and self-hosted Sentry, this version requires Sentry version >= [22.3.0](https://github.com/getsentry/relay/releases/tag/22.3.0).
 
 ### Various fixes & improvements
 
@@ -44,7 +386,7 @@ This is fixed now by ignoring the sampleRate for transactions. If you use custom
 
 ## 7.10.0
 
-- fix: Always tracks App start for Hybrid SDKs (#1662) 
+- fix: Always tracks App start for Hybrid SDKs (#1662)
 - feat: Send SDK integrations (#1647)
 - fix: Don't track OOMs for unit tests (#1651)
 - fix: Add verification for vendor UUID in OOM logic (#1648)
@@ -224,7 +566,7 @@ for ViewControllers, HTTP requests, app start and slow and frozen frames.
 - feat: Add breadcrumbs for HTTP requests (#1258)
 - feat: Add clearAttachments to Scope (#1195)
 - feat: Expose tracked screen frames (#1262)
-- feat: Expose AppStartMeasurment for Hybrid SDKs (#1251)
+- feat: Expose AppStartMeasurement for Hybrid SDKs (#1251)
 
 ### Fixes
 
@@ -240,7 +582,7 @@ for ViewControllers, HTTP requests, app start and slow and frozen frames.
 ## 7.2.0-beta.9
 
 - feat: Expose tracked screen frames (#1262)
-- feat: Expose AppStartMeasurment for Hybrid SDKs (#1251)
+- feat: Expose AppStartMeasurement for Hybrid SDKs (#1251)
 - fix: Span serialization HTTP data in wrong place. (#1255)
 - feat: Add tags to Sentry Span (#1243)
 
@@ -329,7 +671,7 @@ ref: Prefix TracesSampler with Sentry (#1091)
 ## 7.0.0
 
 This is a major bump with the [Performance Monitoring API](https://docs.sentry.io/platforms/apple/performance/) and [Out of Memory Tracking](https://docs.sentry.io/platforms/apple/configuration/out-of-memory/), many improvements and a few breaking changes.
-For a detailed explanation  how to upgrade please checkout the [migration guide](https://docs.sentry.io/platforms/apple/migration/).
+For a detailed explanation how to upgrade please checkout the [migration guide](https://docs.sentry.io/platforms/apple/migration/).
 
 ### Breaking Changes
 
@@ -343,7 +685,7 @@ For a detailed explanation  how to upgrade please checkout the [migration guide]
 - ref: SentryEvent.timestamp changed to nullable.
 - ref: Add read-only scope property to Hub (#975)
 - ref: Remove SentryException.userReported (#974)
-- ref: Replace SentryLogLevel with SentryLevel (#978)
+- ref: Replace SentryLogLevel with SentryLevel (#979)
 - fix: Mark frames as inApp (#956)
 
 ### Features
@@ -438,6 +780,7 @@ Features and fixes:
 - ref: Add read-only scope property to Hub #975
 - ref: Remove SentryException.userReported #974
 - ref: Replace SentryLogLevel with SentryLevel #978
+
 ## 7.0.0-alpha.0
 
 **Breaking Change**: This version introduces a change to the grouping of issues. The SDK now sets the `inApp`
@@ -548,6 +891,7 @@ to group by domain only.
 - feat: Manually capturing User Feedback #804
 
 ## 6.0.4
+
 - fix: Sanitize UserInfo of NSError and NSException #770
 - fix: Xcode 12 warnings for Cocoapods #791
 
@@ -574,7 +918,7 @@ to group by domain only.
 ## 6.0.0
 
 This is a major bump with lots of internal improvements and a few breaking changes.
-For a detailed explanation  how to updgrade please checkout the [migration guide](https://docs.sentry.io/platforms/apple/migration/).
+For a detailed explanation how to updgrade please checkout the [migration guide](https://docs.sentry.io/platforms/apple/migration/).
 
 Breaking changes:
 
@@ -620,6 +964,7 @@ Breaking changes:
 - fix: Public Headers #735
 
 Fix:
+
 - fix: Setting environment for Sessions #734
 
 ## 6.0.0-beta.1

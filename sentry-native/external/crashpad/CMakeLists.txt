@@ -52,7 +52,22 @@ endfunction()
 
 if(WIN32)
     enable_language(ASM_MASM)
+
     if(MINGW)
+        find_program(JWASM_FOUND jwasm)
+        if (JWASM_FOUND)
+            set(CMAKE_ASM_MASM_COMPILER ${JWASM_FOUND})
+            execute_process(COMMAND ${CMAKE_C_COMPILER} --version OUTPUT_VARIABLE COMPILER_VERSION_OUTPUT)
+            if (COMPILER_VERSION_OUTPUT)
+                if (COMPILER_VERSION_OUTPUT MATCHES "x86_64")
+                    set(JWASM_FLAGS -win64)
+                else()
+                    set(JWASM_FLAGS -coff)
+                endif()
+            endif()
+           set(CMAKE_ASM_MASM_FLAGS ${CMAKE_ASM_MASM_FLAGS} ${JWASM_FLAGS})
+        endif(JWASM_FOUND)
+
         if(NOT CMAKE_ASM_MASM_COMPILER OR CMAKE_ASM_MASM_COMPILER STREQUAL "ml" OR CMAKE_ASM_MASM_COMPILER STREQUAL "ml64")
             message(WARNING "No custom ASM_MASM compiler defined via 'CMAKE_ASM_MASM_COMPILER'. Trying to use UASM...")
             set(CMAKE_ASM_MASM_COMPILER "uasm")
@@ -60,7 +75,7 @@ if(WIN32)
         if(NOT CMAKE_ASM_MASM_FLAGS)
             set(CMAKE_ASM_MASM_FLAGS "-win64 -10") #use default compatibility flags
         endif()
-    endif()
+   endif(MINGW)
 else()
     enable_language(ASM)
 endif()
@@ -100,6 +115,15 @@ if(MSVC)
         $<$<COMPILE_LANGUAGE:C,CXX>:/wd4577> # 'noexcept' used with no exception handling mode specified.
         $<$<COMPILE_LANGUAGE:C,CXX>:/wd4996> # 'X' was declared deprecated.
     )
+
+    # WER support is only available starting from Win10 build 10941
+    if("${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}" VERSION_LESS 10.0.19041)
+        message(STATUS "WER support disabled. Needs target platform >= 10.0.19041 (actual: ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION})")
+    else()
+        SET(CRASHPAD_WER_ENABLED TRUE)
+        SET(CRASHPAD_WER_ENABLED TRUE PARENT_SCOPE)
+        message(STATUS "WER support enabled")
+    endif()
 elseif(MINGW)
     # redirect to wmain
     # FIXME: cmake 3.13 added target_link_options
