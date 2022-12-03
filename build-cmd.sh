@@ -28,7 +28,7 @@ source_environment_tempfile="$stage/source_environment.sh"
 "$autobuild" source_environment > "$source_environment_tempfile"
 . "$source_environment_tempfile"
 
-version="1.3.0"
+version="7.31.3-0.5.2"
 echo "${version}" > "${stage}/VERSION.txt"
 
 case "$AUTOBUILD_PLATFORM" in
