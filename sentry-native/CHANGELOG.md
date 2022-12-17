@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.3
+
+**Fixes**
+
+- Linux module-finder now also searches for code-id in ".note" ELF sections ([#775](https://github.com/getsentry/sentry-native/pull/775))
+
+**Internal**:
+
+- CI: updated github actions to upgrade deprecated node runners. ([#767](https://github.com/getsentry/sentry-native/pull/767))
+- CI: upgraded Ubuntu to 20.04 for "old gcc" (v7) job due to deprecation. ([#768](https://github.com/getsentry/sentry-native/pull/768))
+
 ## 0.5.2
 
 **Fixes**:
