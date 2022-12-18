@@ -132,7 +132,7 @@ case "$AUTOBUILD_PLATFORM" in
                     -DCMAKE_C_FLAGS="$RELEASE_CFLAGS" \
                     -DCMAKE_CXX_FLAGS="$RELEASE_CXXFLAGS" \
                     -DCMAKE_INSTALL_PREFIX="$stage/sentry" \
-                    -DSENTRY_BUILD_SHARED_LIBS=FALSE \
+                    -DSENTRY_BUILD_SHARED_LIBS=ON \
                     -DSENTRY_BACKEND="crashpad"
 
                 cmake --build . --config RelWithDebInfo --parallel $AUTOBUILD_CPU_COUNT
@@ -145,7 +145,7 @@ case "$AUTOBUILD_PLATFORM" in
                 mkdir -p "$stage/lib/release"
 
                 cp -a bin/* "$stage/bin/release"
-                cp -a lib/*.a "$stage/lib/release"
+                cp -a lib/*.so "$stage/lib/release"
                 cp -a include/* "$stage/include/sentry"
             popd
         popd
