@@ -67,7 +67,7 @@ case "$AUTOBUILD_PLATFORM" in
             export SDKROOT=$(xcodebuild -version -sdk ${SDKNAME} Path)
             export MACOSX_DEPLOYMENT_TARGET=10.15
 
-            carthage build --archive --platform macOS
+            carthage build --archive --platform macOS --verbose
 
             mkdir -p "$stage/lib/release"
 
@@ -81,6 +81,15 @@ case "$AUTOBUILD_PLATFORM" in
                 popd
             popd
             cp -a Carthage/Build/Mac/* $stage/lib/release/
+
+            if [ -n "${APPLE_SIGNATURE:=""}" -a -n "${APPLE_KEY:=""}" -a -n "${APPLE_KEYCHAIN:=""}" ]; then
+                KEYCHAIN_PATH="$HOME/Library/Keychains/$APPLE_KEYCHAIN"
+                security unlock-keychain -p $APPLE_KEY $KEYCHAIN_PATH
+                codesign --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNATURE" --force --timestamp "$stage/lib/release/Sentry.framework" || true
+                security lock-keychain $KEYCHAIN_PATH
+            else
+                echo "Code signing not configured; skipping codesign."
+            fi
         popd
     ;;            
 
