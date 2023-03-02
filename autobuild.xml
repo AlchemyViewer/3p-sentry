@@ -342,7 +342,6 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
           </map>
           <key>manifest</key>
           <array>
-            <string>bin/release/*</string>
             <string>lib/release/*</string>
           </array>
           <key>name</key>
