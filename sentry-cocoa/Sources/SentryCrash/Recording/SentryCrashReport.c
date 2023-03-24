@@ -33,7 +33,6 @@
 #include "SentryCrashJSONCodec.h"
 #include "SentryCrashMach.h"
 #include "SentryCrashMemory.h"
-#include "SentryCrashMonitor_Zombie.h"
 #include "SentryCrashObjC.h"
 #include "SentryCrashReportFields.h"
 #include "SentryCrashReportVersion.h"
@@ -106,7 +105,6 @@ typedef struct {
 
 static const char *g_userInfoJSON;
 static SentryCrash_IntrospectionRules g_introspectionRules;
-static SentryCrashReportWriteCallback g_userSectionWriteCallback;
 
 #pragma mark Callbacks
 
@@ -135,7 +133,7 @@ static void
 addUIntegerElement(
     const SentryCrashReportWriter *const writer, const char *const key, const uint64_t value)
 {
-    sentrycrashjson_addIntegerElement(getJsonContext(writer), key, (int64_t)value);
+    sentrycrashjson_addUIntegerElement(getJsonContext(writer), key, value);
 }
 
 static void
@@ -606,19 +604,6 @@ isRestrictedClass(const char *name)
     return false;
 }
 
-static void
-writeZombieIfPresent(
-    const SentryCrashReportWriter *const writer, const char *const key, const uintptr_t address)
-{
-#if SentryCrashCRASH_HAS_OBJC
-    const void *object = (const void *)address;
-    const char *zombieClassName = sentrycrashzombie_className(object);
-    if (zombieClassName != NULL) {
-        writer->addStringElement(writer, key, zombieClassName);
-    }
-#endif
-}
-
 static bool
 writeObjCObject(const SentryCrashReportWriter *const writer, const uintptr_t address, int *limit)
 {
@@ -701,7 +686,6 @@ writeMemoryContents(const SentryCrashReportWriter *const writer, const char *con
     writer->beginObject(writer, key);
     {
         writer->addUIntegerElement(writer, SentryCrashField_Address, address);
-        writeZombieIfPresent(writer, SentryCrashField_LastDeallocObject, address);
         if (!writeObjCObject(writer, address, limit)) {
             if (object == NULL) {
                 writer->addStringElement(
@@ -745,10 +729,6 @@ isNotableAddress(const uintptr_t address)
     const void *object = (const void *)address;
 
 #if SentryCrashCRASH_HAS_OBJC
-    if (sentrycrashzombie_className(object) != NULL) {
-        return true;
-    }
-
     if (sentrycrashobjc_objectType(object) != SentryCrashObjCTypeUnknown) {
         return true;
     }
@@ -1290,7 +1270,7 @@ writeError(const SentryCrashReportWriter *const writer, const char *const key,
                 writer->addStringElement(writer, SentryCrashField_CodeName, machCodeName);
             }
             writer->addUIntegerElement(
-                writer, SentryCrashField_Subcode, (unsigned)crash->mach.subcode);
+                writer, SentryCrashField_Subcode, (size_t)crash->mach.subcode);
         }
         writer->endContainer(writer);
 #endif
@@ -1351,30 +1331,8 @@ writeError(const SentryCrashReportWriter *const writer, const char *const key,
             writer->addStringElement(writer, SentryCrashField_Type, SentryCrashExcType_Signal);
             break;
 
-        case SentryCrashMonitorTypeUserReported: {
-            writer->addStringElement(writer, SentryCrashField_Type, SentryCrashExcType_User);
-            writer->beginObject(writer, SentryCrashField_UserReported);
-            {
-                writer->addStringElement(writer, SentryCrashField_Name, crash->userException.name);
-                if (crash->userException.language != NULL) {
-                    writer->addStringElement(
-                        writer, SentryCrashField_Language, crash->userException.language);
-                }
-                if (crash->userException.lineOfCode != NULL) {
-                    writer->addStringElement(
-                        writer, SentryCrashField_LineOfCode, crash->userException.lineOfCode);
-                }
-                if (crash->userException.customStackTrace != NULL) {
-                    writer->addJSONElement(writer, SentryCrashField_Backtrace,
-                        crash->userException.customStackTrace, true);
-                }
-            }
-            writer->endContainer(writer);
-            break;
-        }
         case SentryCrashMonitorTypeSystem:
         case SentryCrashMonitorTypeApplicationState:
-        case SentryCrashMonitorTypeZombie:
             SentryCrashLOG_ERROR(
                 "Crash monitor type 0x%x shouldn't be able to cause events!", crash->crashType);
             break;
@@ -1774,13 +1732,6 @@ sentrycrashreport_writeStandardReport(
         } else {
             writer->beginObject(writer, SentryCrashField_User);
         }
-
-        if (g_userSectionWriteCallback != NULL) {
-            sentrycrashfu_flushBufferedWriter(&bufferedWriter);
-            if (monitorContext->currentSnapshotUserReported == false) {
-                g_userSectionWriteCallback(writer);
-            }
-        }
         writer->endContainer(writer);
         sentrycrashfu_flushBufferedWriter(&bufferedWriter);
 
@@ -1849,12 +1800,4 @@ sentrycrashreport_setDoNotIntrospectClasses(const char **doNotIntrospectClasses,
         }
         free(oldClasses);
     }
-}
-
-void
-sentrycrashreport_setUserSectionWriteCallback(
-    const SentryCrashReportWriteCallback userSectionWriteCallback)
-{
-    SentryCrashLOG_TRACE("Set userSectionWriteCallback to %p", userSectionWriteCallback);
-    g_userSectionWriteCallback = userSectionWriteCallback;
 }

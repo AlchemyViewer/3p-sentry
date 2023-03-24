@@ -34,7 +34,6 @@ extern "C" {
  * - Fatal signal
  * - Uncaught C++ exception
  * - Uncaught Objective-C NSException
- * - User reported custom exception
  */
 typedef enum {
     /* Captures and reports Mach exceptions. */
@@ -51,24 +50,18 @@ typedef enum {
     /* Captures and reports NSExceptions. */
     SentryCrashMonitorTypeNSException = 0x08,
 
-    /* Accepts and reports user-generated exceptions. */
-    SentryCrashMonitorTypeUserReported = 0x20,
-
     /* Keeps track of and injects system information. */
     SentryCrashMonitorTypeSystem = 0x40,
 
     /* Keeps track of and injects application state. */
     SentryCrashMonitorTypeApplicationState = 0x80,
 
-    /* Keeps track of zombies, and injects the last zombie NSException. */
-    SentryCrashMonitorTypeZombie = 0x100,
 } SentryCrashMonitorType;
 
 #define SentryCrashMonitorTypeAll                                                                  \
     (SentryCrashMonitorTypeMachException | SentryCrashMonitorTypeSignal                            \
         | SentryCrashMonitorTypeCPPException | SentryCrashMonitorTypeNSException                   \
-        | SentryCrashMonitorTypeUserReported | SentryCrashMonitorTypeSystem                        \
-        | SentryCrashMonitorTypeApplicationState | SentryCrashMonitorTypeZombie)
+        | SentryCrashMonitorTypeSystem | SentryCrashMonitorTypeApplicationState)
 
 #define SentryCrashMonitorTypeDebuggerUnsafe                                                       \
     (SentryCrashMonitorTypeMachException | SentryCrashMonitorTypeSignal                            \
@@ -76,8 +69,6 @@ typedef enum {
 
 #define SentryCrashMonitorTypeAsyncSafe                                                            \
     (SentryCrashMonitorTypeMachException | SentryCrashMonitorTypeSignal)
-
-#define SentryCrashMonitorTypeOptional (SentryCrashMonitorTypeZombie)
 
 #define SentryCrashMonitorTypeAsyncUnsafe                                                          \
     (SentryCrashMonitorTypeAll & (~SentryCrashMonitorTypeAsyncSafe))
@@ -91,21 +82,14 @@ typedef enum {
  */
 #define SentryCrashMonitorTypeProductionSafe (SentryCrashMonitorTypeAll)
 
-/** Production safe monitors, minus the optional ones. */
-#define SentryCrashMonitorTypeProductionSafeMinimal                                                \
-    (SentryCrashMonitorTypeProductionSafe & (~SentryCrashMonitorTypeOptional))
+/** Production safe monitors */
+#define SentryCrashMonitorTypeProductionSafeMinimal (SentryCrashMonitorTypeProductionSafe)
 
 /** Monitors that are required for proper operation.
  * These add essential information to the reports, but do not trigger reporting.
  */
 #define SentryCrashMonitorTypeRequired                                                             \
     (SentryCrashMonitorTypeSystem | SentryCrashMonitorTypeApplicationState)
-
-/** Effectively disables automatica reporting. The only way to generate a report
- * in this mode is by manually calling sentrycrash_reportUserException().
- */
-#define SentryCrashMonitorTypeManual                                                               \
-    (SentryCrashMonitorTypeRequired | SentryCrashMonitorTypeUserReported)
 
 #define SentryCrashMonitorTypeNone 0
 

@@ -3,9 +3,11 @@
 #import "SentryCrashStackCursor_MachineContext.h"
 #import "SentryCrashStackCursor_SelfThread.h"
 #import "SentryCrashStackEntryMapper.h"
+#import "SentryCrashSymbolicator.h"
 #import "SentryFrame.h"
 #import "SentryFrameRemover.h"
 #import "SentryStacktrace.h"
+#import <dlfcn.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -28,19 +30,18 @@ SentryStacktraceBuilder ()
 
 - (SentryStacktrace *)retrieveStacktraceFromCursor:(SentryCrashStackCursor)stackCursor
 {
-    NSMutableArray<SentryFrame *> *frames = [NSMutableArray new];
+    NSMutableArray<SentryFrame *> *frames = [NSMutableArray array];
     SentryFrame *frame = nil;
     while (stackCursor.advanceCursor(&stackCursor)) {
-        if (stackCursor.symbolicate(&stackCursor)) {
-            if (stackCursor.stackEntry.address == SentryCrashSC_ASYNC_MARKER) {
-                if (frame != nil) {
-                    frame.stackStart = @(YES);
-                }
-                // skip the marker frame
-                continue;
+        if (stackCursor.stackEntry.address == SentryCrashSC_ASYNC_MARKER) {
+            if (frame != nil) {
+                frame.stackStart = @(YES);
             }
-            frame = [self.crashStackEntryMapper mapStackEntryWithCursor:stackCursor];
-            [frames addObject:frame];
+            // skip the marker frame
+            continue;
+        }
+        if (stackCursor.symbolicate(&stackCursor)) {
+            [frames addObject:[self.crashStackEntryMapper mapStackEntryWithCursor:stackCursor]];
         }
     }
     sentrycrash_async_backtrace_decref(stackCursor.async_caller);
@@ -85,7 +86,7 @@ SentryStacktraceBuilder ()
 - (SentryStacktrace *)buildStacktraceForThread:(SentryCrashThread)thread
                                        context:(struct SentryCrashMachineContext *)context
 {
-    sentrycrashmc_getContextForThread(thread, context, false);
+    sentrycrashmc_getContextForThread(thread, context, NO);
     SentryCrashStackCursor stackCursor;
     sentrycrashsc_initWithMachineContext(&stackCursor, MAX_STACKTRACE_LENGTH, context);
 
@@ -99,6 +100,14 @@ SentryStacktraceBuilder ()
     NSInteger framesToSkip = 0;
     sentrycrashsc_initSelfThread(&stackCursor, (int)framesToSkip);
 
+    return [self retrieveStacktraceFromCursor:stackCursor];
+}
+
+- (nullable SentryStacktrace *)buildStacktraceForCurrentThreadAsyncUnsafe
+{
+    SentryCrashStackCursor stackCursor;
+    sentrycrashsc_initSelfThread(&stackCursor, 0);
+    stackCursor.symbolicate = sentrycrashsymbolicator_symbolicate_async_unsafe;
     return [self retrieveStacktraceFromCursor:stackCursor];
 }
 

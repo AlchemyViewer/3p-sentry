@@ -1,3 +1,4 @@
+import SentryTestUtils
 import XCTest
 
 class PrivateSentrySDKOnlyTests: XCTestCase {
@@ -127,7 +128,7 @@ class PrivateSentrySDKOnlyTests: XCTestCase {
     
     func testGetFrames() {
         let tracker = SentryFramesTracker.sharedInstance()
-        let displayLink = TestDiplayLinkWrapper()
+        let displayLink = TestDisplayLinkWrapper()
         
         tracker.setDisplayLinkWrapper(displayLink)
         tracker.start()

@@ -1,4 +1,5 @@
 import Sentry
+import SentryTestUtils
 import SwiftUI
 import XCTest
 
@@ -50,7 +51,7 @@ class SentryNetworkTrackerIntegrationTests: XCTestCase {
     
     func testNetworkTrackerDisabled_WhenAutoPerformanceTrackingDisabled() {
         assertNetworkTrackerDisabled { options in
-            options.enableAutoPerformanceTracking = false
+            options.enableAutoPerformanceTracing = false
         }
     }
     
@@ -70,6 +71,7 @@ class SentryNetworkTrackerIntegrationTests: XCTestCase {
         let options = Options()
         options.tracesSampleRate = 0.0
         options.enableNetworkBreadcrumbs = false
+        options.enableCaptureFailedRequests = false
                 
         assertRemovedIntegration(options)
     }
@@ -150,7 +152,7 @@ class SentryNetworkTrackerIntegrationTests: XCTestCase {
         XCTAssertEqual(1, breadcrumbs?.count)
     }
     
-    func testGetRequest_SpanCreatedAndBaggageHeaderAdded_disabled() {
+    func testGetRequest_SpanCreatedAndBaggageHeaderAdded() {
         startSDK()
         let transaction = SentrySDK.startTransaction(name: "Test Transaction", operation: "TEST", bindToScope: true) as! SentryTracer
         let expect = expectation(description: "Request completed")
@@ -173,8 +175,8 @@ class SentryNetworkTrackerIntegrationTests: XCTestCase {
         XCTAssertEqual(children?.count, 1) //Span was created in task resume swizzle.
         let networkSpan = children![0]
         XCTAssertTrue(networkSpan.isFinished) //Span was finished in task setState swizzle.
-        XCTAssertEqual(SENTRY_NETWORK_REQUEST_OPERATION, networkSpan.context.operation)
-        XCTAssertEqual("GET \(SentryNetworkTrackerIntegrationTests.testBaggageURL)", networkSpan.context.spanDescription)
+        XCTAssertEqual(SENTRY_NETWORK_REQUEST_OPERATION, networkSpan.operation)
+        XCTAssertEqual("GET \(SentryNetworkTrackerIntegrationTests.testBaggageURL)", networkSpan.spanDescription)
         
         XCTAssertEqual("200", networkSpan.tags["http.status_code"])
     }
@@ -210,17 +212,17 @@ class SentryNetworkTrackerIntegrationTests: XCTestCase {
         XCTAssertFalse(SentryNetworkTracker.sharedInstance.isCaptureFailedRequestsEnabled)
     }
     
-    func testCaptureFailedRequestsDisabled() {
-        startSDK()
-
-        XCTAssertFalse(SentryNetworkTracker.sharedInstance.isCaptureFailedRequestsEnabled)
-    }
-    
     func testCaptureFailedRequestsEnabled() {
-        fixture.options.enableCaptureFailedRequests = true
         startSDK()
 
         XCTAssertTrue(SentryNetworkTracker.sharedInstance.isCaptureFailedRequestsEnabled)
+    }
+    
+    func testCaptureFailedRequestsDisabled() {
+        fixture.options.enableCaptureFailedRequests = false
+        startSDK()
+
+        XCTAssertFalse(SentryNetworkTracker.sharedInstance.isCaptureFailedRequestsEnabled)
     }
     
     func testGetCaptureFailedRequestsEnabled() {

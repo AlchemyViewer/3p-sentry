@@ -2,6 +2,7 @@
 #import "SentryError.h"
 #import "SentryMeta.h"
 #import "SentryNSURLRequest.h"
+#import "SentryOptions+HybridSDKs.h"
 #import <Sentry/Sentry.h>
 #import <XCTest/XCTest.h>
 
@@ -62,7 +63,7 @@
 - (void)testMissingScheme
 {
     NSError *error = nil;
-    SentryOptions *options = [[SentryOptions alloc] initWithDict:@{ @"dsn" : @"sentry.io" }
+    SentryOptions *options = [[SentryOptions alloc] initWithDict:@{ @"dsn" : @"https://sentry.io" }
                                                 didFailWithError:&error];
     XCTAssertEqual(kSentryErrorInvalidDsnError, error.code);
     XCTAssertNil(options);
@@ -132,6 +133,12 @@
     XCTAssertNotNil([dsn getStoreEndpoint]);
     // Assert same reference
     XCTAssertTrue([dsn getStoreEndpoint] == [dsn getStoreEndpoint]);
+}
+
+- (void)testInitWithInvalidString
+{
+    SentryDsn *dsn = [[SentryDsn alloc] initWithString:@"This is invalid DSN" didFailWithError:nil];
+    XCTAssertNil(dsn);
 }
 
 - (void)testGetEnvelopeDsnCachesResult

@@ -1,15 +1,10 @@
 import Sentry
+import SentryTestUtils
 import XCTest
 
-// Although we only run this test above the below specified versions, we expect the
-// implementation to be thread safe
-@available(tvOS 10.0, *)
-@available(OSX 10.12, *)
-@available(iOS 10.0, *)
 class SentryHttpTransportTests: XCTestCase {
 
     private static let dsnAsString = TestConstants.dsnAsString(username: "SentryHttpTransportTests")
-    private static let dsn = TestConstants.dsn(username: "SentryHttpTransportTests")
 
     private class Fixture {
         let event: Event
@@ -28,7 +23,11 @@ class SentryHttpTransportTests: XCTestCase {
         let requestManager: TestRequestManager
         let requestBuilder = TestNSURLRequestBuilder()
         let rateLimits: DefaultRateLimits
-        let dispatchQueueWrapper = TestSentryDispatchQueueWrapper()
+        let dispatchQueueWrapper: TestSentryDispatchQueueWrapper = {
+            let dqw = TestSentryDispatchQueueWrapper()
+            dqw.dispatchAfterExecutesBlock = true
+            return dqw
+        }()
         let reachability = TestSentryReachability()
         let flushTimeout: TimeInterval = 0.5
 
@@ -65,7 +64,7 @@ class SentryHttpTransportTests: XCTestCase {
 
             options = Options()
             options.dsn = SentryHttpTransportTests.dsnAsString
-            fileManager = try! SentryFileManager(options: options, andCurrentDateProvider: currentDateProvider)
+            fileManager = try! TestFileManager(options: options, andCurrentDateProvider: currentDateProvider)
 
             requestManager = TestRequestManager(session: URLSession(configuration: URLSessionConfiguration.ephemeral))
             rateLimits = DefaultRateLimits(retryAfterHeaderParser: RetryAfterHeaderParser(httpDateParser: HttpDateParser()), andRateLimitParser: RateLimitParser())
@@ -108,9 +107,13 @@ class SentryHttpTransportTests: XCTestCase {
         }
     }
 
+    class func dsn() throws -> SentryDsn {
+        try TestConstants.dsn(username: "SentryHttpTransportTests")
+    }
+
     class func buildRequest(_ envelope: SentryEnvelope) -> SentryNSURLRequest {
         let envelopeData = try! SentrySerialization.data(with: envelope)
-        return try! SentryNSURLRequest(envelopeRequestWith: SentryHttpTransportTests.dsn, andData: envelopeData)
+        return try! SentryNSURLRequest(envelopeRequestWith: dsn(), andData: envelopeData)
     }
 
     private var fixture: Fixture!
@@ -138,7 +141,8 @@ class SentryHttpTransportTests: XCTestCase {
 
         waitForAllRequests()
         givenOkResponse()
-        _ = fixture.sut
+        let sut = fixture.sut
+        XCTAssertNotNil(sut)
         waitForAllRequests()
 
         assertEnvelopesStored(envelopeCount: 0)
@@ -408,9 +412,13 @@ class SentryHttpTransportTests: XCTestCase {
         let sessionEnvelope = SentryEnvelope(id: fixture.event.eventId, singleItem: SentryEnvelopeItem(session: fixture.session))
 
         let sessionData = try! SentrySerialization.data(with: sessionEnvelope)
-        let sessionRequest = try! SentryNSURLRequest(envelopeRequestWith: SentryHttpTransportTests.dsn, andData: sessionData)
+        let sessionRequest = try! SentryNSURLRequest(envelopeRequestWith: SentryHttpTransportTests.dsn(), andData: sessionData)
 
-        XCTAssertEqual(sessionRequest.httpBody, fixture.requestManager.requests.invocations[3].httpBody, "Envelope with only session item should be sent.")
+        if fixture.requestManager.requests.invocations.count > 3 {
+            XCTAssertEqual(sessionRequest.httpBody, fixture.requestManager.requests.invocations[3].httpBody, "Envelope with only session item should be sent.")
+        } else {
+            XCTFail("Expected a fourth invocation")
+        }
     }
 
     func testAllCachedEnvelopesCantDeserializeEnvelope() throws {
@@ -435,7 +443,11 @@ class SentryHttpTransportTests: XCTestCase {
         XCTAssertEqual(3, fixture.requestManager.requests.count)
         XCTAssertEqual(fixture.eventWithAttachmentRequest.httpBody, fixture.requestManager.requests.invocations[1].httpBody, "Cached envelope was not sent first.")
 
-        XCTAssertEqual(fixture.sessionRequest.httpBody, fixture.requestManager.requests.invocations[2].httpBody, "Cached envelope was not sent first.")
+        if fixture.requestManager.requests.invocations.count > 2 {
+            XCTAssertEqual(fixture.sessionRequest.httpBody, fixture.requestManager.requests.invocations[2].httpBody, "Cached envelope was not sent first.")
+        } else {
+            XCTFail("Expected a third invocation")
+        }
     }
     
     func testRecordLostEvent_SendingEvent_AttachesClientReport() {
@@ -521,7 +533,7 @@ class SentryHttpTransportTests: XCTestCase {
 
     func testSendEnvelopesConcurrent() {
         self.measure {
-            fixture.requestManager.responseDelay = 0.000_1
+            fixture.requestManager.responseDelay = 0.0001
 
             let queue = fixture.queue
 
@@ -552,6 +564,30 @@ class SentryHttpTransportTests: XCTestCase {
         sendEvent()
         assertEnvelopesStored(envelopeCount: 0)
         assertRequestsSent(requestCount: 1)
+    }
+    
+    func testDeallocated_CachedEnvelopesNotAllSent() throws {
+        givenNoInternetConnection()
+        givenCachedEvents(amount: 10)
+    
+        givenOkResponse()
+        fixture.dispatchQueueWrapper.dispatchAfterExecutesBlock = false
+        
+        // Interact with sut in extra function so ARC deallocates it
+        func getSut() {
+            let sut = fixture.sut
+            sut.send(envelope: fixture.eventEnvelope)
+            waitForAllRequests()
+        }
+        getSut()
+        
+        for dispatchAfterBlock in fixture.dispatchQueueWrapper.dispatchAfterInvocations.invocations {
+            dispatchAfterBlock.block()
+        }
+        
+        // The amount of sent envelopes is non deterministic as it depends on how fast ARC deallocates the sut above.
+        // We only want to ensure that not all envelopes are sent, so 7 should be fine.
+        XCTAssertLessThan(7, fixture.fileManager.getAllEnvelopes().count)
     }
     
     func testBuildingRequestFailsAndRateLimitActive_RecordsLostEvents() {
@@ -752,6 +788,18 @@ class SentryHttpTransportTests: XCTestCase {
         fixture.reachability.triggerNetworkReachable()
 
         XCTAssertEqual(2, fixture.requestManager.requests.count)
+    }
+    
+    func testDealloc_StopsReachabilityMonitoring() {
+        _ = fixture.sut
+
+        XCTAssertEqual(1, fixture.reachability.stopMonitoringInvocations.count)
+    }
+    
+    func testDealloc_TriggerNetworkReachable_NoCrash() {
+        _ = fixture.sut
+        
+        fixture.reachability.triggerNetworkReachable()
     }
 
     private func givenRetryAfterResponse() -> HTTPURLResponse {

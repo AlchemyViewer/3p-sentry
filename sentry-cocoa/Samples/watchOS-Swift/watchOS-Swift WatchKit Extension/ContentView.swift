@@ -2,11 +2,14 @@ import Sentry
 import SwiftUI
 
 struct ContentView: View {
+    
+    @StateObject var viewModel = ContentViewModel()
+    
     var addBreadcrumbAction: () -> Void = {
         let crumb = Breadcrumb(level: SentryLevel.info, category: "Debug")
         crumb.message = "tapped addBreadcrumb"
         crumb.type = "user"
-        SentrySDK.addBreadcrumb(crumb: crumb)
+        SentrySDK.addBreadcrumb(crumb)
     }
     
     var captureMessageAction: () -> Void = {
@@ -56,8 +59,33 @@ struct ContentView: View {
                 Button(action: captureTransaction) {
                     Text("Capture Transaction")
                 }
+                
+                Button(action: {
+                    viewModel.causeANR()
+                }) {
+                    Text(viewModel.anrText)
+                }
             }
         }
+    }
+}
+
+class ContentViewModel: ObservableObject {
+    
+    @Published var anrText = "Cause ANR"
+    
+    func causeANR() {
+        
+        var i = 0
+        
+        for _ in 0...5_000_000 {
+            i += Int.random(in: 0...10)
+            i -= 1
+            
+            anrText = "\(i)"
+        }
+        
+        anrText = "Cause ANR"
     }
 }
 

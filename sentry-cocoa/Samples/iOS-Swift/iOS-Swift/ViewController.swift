@@ -9,7 +9,8 @@ class ViewController: UIViewController {
     @IBOutlet weak var framesLabel: UILabel!
     @IBOutlet weak var breadcrumbLabel: UILabel!
     
-    private let dispatchQueue = DispatchQueue(label: "ViewController")
+    private let dispatchQueue = DispatchQueue(label: "ViewController", attributes: .concurrent)
+    private let diskWriteException = DiskWriteException()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -20,20 +21,20 @@ class ViewController: UIViewController {
             scope.setTag(value: "swift", key: "language")
             scope.setExtra(value: String(describing: self), key: "currentViewController")
 
-            let user = Sentry.User(userId: "1")
+            let user = User(userId: "1")
             user.email = "tony@example.com"
             scope.setUser(user)
             
             if let path = Bundle.main.path(forResource: "Tongariro", ofType: "jpg") {
-                scope.add(Attachment(path: path, filename: "Tongariro.jpg", contentType: "image/jpeg"))
+                scope.addAttachment(Attachment(path: path, filename: "Tongariro.jpg", contentType: "image/jpeg"))
             }
             if let data = "hello".data(using: .utf8) {
-                scope.add(Attachment(data: data, filename: "log.txt"))
+                scope.addAttachment(Attachment(data: data, filename: "log.txt"))
             }
         }
 
         // Also works
-        let user = Sentry.User(userId: "1")
+        let user = User(userId: "1")
         user.email = "tony1@example.com"
         SentrySDK.setUser(user)
         
@@ -50,10 +51,8 @@ class ViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
-        if #available(iOS 10.0, *) {
-            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-                self.framesLabel?.text = "Frames Total:\(PrivateSentrySDKOnly.currentScreenFrames.total) Slow:\(PrivateSentrySDKOnly.currentScreenFrames.slow) Frozen:\(PrivateSentrySDKOnly.currentScreenFrames.frozen)"
-            }
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+            self.framesLabel?.text = "Frames Total:\(PrivateSentrySDKOnly.currentScreenFrames.total) Slow:\(PrivateSentrySDKOnly.currentScreenFrames.slow) Frozen:\(PrivateSentrySDKOnly.currentScreenFrames.frozen)"
         }
 
         SentrySDK.configureScope { (scope) in
@@ -67,7 +66,7 @@ class ViewController: UIViewController {
                 return
             }
 
-            self.breadcrumbLabel.text = "{ category: \(breadcrumb["category"] ?? "nil"), parentViewController: \(data["parentViewController"] ?? "nil"), beingPresented: \(data["beingPresented"] ?? "nil"), window_isKeyWindow: \(data["window_isKeyWindow"] ?? "nil"), is_window_rootViewController: \(data["is_window_rootViewController"] ?? "nil") }"
+            self.breadcrumbLabel?.text = "{ category: \(breadcrumb["category"] ?? "nil"), parentViewController: \(data["parentViewController"] ?? "nil"), beingPresented: \(data["beingPresented"] ?? "nil"), window_isKeyWindow: \(data["window_isKeyWindow"] ?? "nil"), is_window_rootViewController: \(data["is_window_rootViewController"] ?? "nil") }"
         }
     }
     
@@ -75,7 +74,7 @@ class ViewController: UIViewController {
         let crumb = Breadcrumb(level: SentryLevel.info, category: "Debug")
         crumb.message = "tapped addBreadcrumb"
         crumb.type = "user"
-        SentrySDK.addBreadcrumb(crumb: crumb)
+        SentrySDK.addBreadcrumb(crumb)
     }
     
     @IBAction func captureMessage(_ sender: Any) {
@@ -160,7 +159,15 @@ class ViewController: UIViewController {
     @IBAction func crash(_ sender: Any) {
         SentrySDK.crash()
     }
-    
+
+    // swiftlint:disable force_unwrapping
+    @IBAction func unwrapCrash(_ sender: Any) {
+        let a: String! = nil
+        let b: String = a!
+        print(b)
+    }
+    // swiftlint:enable force_unwrapping
+
     @IBAction func asyncCrash(_ sender: Any) {
         DispatchQueue.main.async {
             self.asyncCrash1()
@@ -194,6 +201,46 @@ class ViewController: UIViewController {
             }
         }
     }
+    
+    @IBAction func diskWriteException(_ sender: Any) {
+        diskWriteException.continuouslyWriteToDisk()
+        
+        // As we are writing to disk continuously we would keep adding spans to this UIEventTransaction.
+        SentrySDK.span?.finish()
+    }
+    
+    @IBAction func highCPULoad(_ sender: Any) {
+        dispatchQueue.async {
+            while true {
+                _ = self.calcPi()
+            }
+        }
+    }
+
+    @IBAction func start100Threads(_ sender: Any) {
+        for _ in 0..<100 {
+            Thread.detachNewThread {
+                Thread.sleep(forTimeInterval: 10)
+            }
+        }
+    }
+    
+    private func calcPi() -> Double {
+        var denominator = 1.0
+        var pi = 0.0
+     
+        for i in 0..<10_000_000 {
+            if i % 2 == 0 {
+                pi += 4 / denominator
+            } else {
+                pi -= 4 / denominator
+            }
+            
+            denominator += 2
+        }
+        
+        return pi
+    }
 
     @IBAction func anrFullyBlocking(_ sender: Any) {
         let buttonTitle = self.anrFullyBlockingButton.currentTitle
@@ -212,18 +259,31 @@ class ViewController: UIViewController {
     @IBAction func anrFillingRunLoop(_ sender: Any) {
         let buttonTitle = self.anrFillingRunLoopButton.currentTitle
         var i = 0
+        
+        func sleep(timeout: Double) {
+            let group = DispatchGroup()
+            group.enter()
+            let queue = DispatchQueue(label: "delay", qos: .background, attributes: [])
+            
+            queue.asyncAfter(deadline: .now() + timeout) {
+                group.leave()
+            }
+            
+            group.wait()
+        }
 
         dispatchQueue.async {
-            for _ in 0...100_000 {
+            for _ in 0...30 {
                 i += Int.random(in: 0...10)
                 i -= 1
                 
                 DispatchQueue.main.async {
-                    self.anrFillingRunLoopButton.setTitle("Work in Progress \(i)", for: .normal)
+                    sleep(timeout: 0.1)
+                    self.anrFillingRunLoopButton.setTitle("Title \(i)", for: .normal)
                 }
             }
             
-            DispatchQueue.main.async {
+            DispatchQueue.main.sync {
                 self.anrFillingRunLoopButton.setTitle(buttonTitle, for: .normal)
             }
         }

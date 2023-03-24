@@ -1,3 +1,4 @@
+import SentryTestUtils
 import XCTest
 
 class SentryANRTrackingIntegrationTests: SentrySDKIntegrationTestsBase {
@@ -81,6 +82,7 @@ class SentryANRTrackingIntegrationTests: SentrySDKIntegrationTestsBase {
             XCTAssertEqual(ex.value, "App hanging for at least 4500 ms.")
             XCTAssertNotNil(ex.stacktrace)
             XCTAssertEqual(ex.stacktrace?.frames.first?.function, "main")
+            XCTAssertTrue(ex.stacktrace?.snapshot?.boolValue ?? false)
             XCTAssertTrue(event?.threads?[0].current?.boolValue ?? false)
             
             guard let threads = event?.threads else {
@@ -97,6 +99,34 @@ class SentryANRTrackingIntegrationTests: SentrySDKIntegrationTestsBase {
             XCTAssertTrue(threadsWithFrames > 1, "Not enough threads with frames")
         }
     }
+    
+    func testANRDetected_ButNoThreads_EventNotCaptured() {
+        givenInitializedTracker()
+        setUpThreadInspector(addThreads: false)
+        
+        Dynamic(sut).anrDetected()
+        
+        assertNoEventCaptured()
+    }
+    
+    func testDealloc_CallsUninstall() {
+        givenInitializedTracker()
+        
+        // // So ARC deallocates the SentryANRTrackingIntegration
+        func initIntegration() {
+            self.crashWrapper.internalIsBeingTraced = false
+            let sut = SentryANRTrackingIntegration()
+            sut.install(with: self.options)
+        }
+        
+        initIntegration()
+        
+        let tracker = SentryDependencyContainer.sharedInstance().getANRTracker(self.options.appHangTimeoutInterval)
+        
+        let listeners = Dynamic(tracker).listeners.asObject as? NSHashTable<NSObject>
+        
+        XCTAssertEqual(1, listeners?.count ?? 2)
+    }
 
     private func givenInitializedTracker(isBeingTraced: Bool = false) {
         givenSdkWithHub()
@@ -105,27 +135,32 @@ class SentryANRTrackingIntegrationTests: SentrySDKIntegrationTestsBase {
         sut.install(with: self.options)
     }
     
-    private func setUpThreadInspector() {
+    private func setUpThreadInspector(addThreads: Bool = true) {
         let threadInspector = TestThreadInspector.instance
         
-        let frame1 = Sentry.Frame()
-        frame1.function = "Second_frame_function"
-        
-        let thread1 = Sentry.Thread(threadId: 0)
-        thread1.stacktrace = Stacktrace(frames: [frame1], registers: [:])
-        thread1.current = true
-        
-        let frame2 = Sentry.Frame()
-        frame2.function = "main"
-        
-        let thread2 = Sentry.Thread(threadId: 1)
-        thread2.stacktrace = Stacktrace(frames: [frame2], registers: [:])
-        thread2.current = false
-        
-        threadInspector.allThreads = [
-            thread2,
-            thread1
-        ]
+        if addThreads {
+            
+            let frame1 = Sentry.Frame()
+            frame1.function = "Second_frame_function"
+            
+            let thread1 = SentryThread(threadId: 0)
+            thread1.stacktrace = SentryStacktrace(frames: [frame1], registers: [:])
+            thread1.current = true
+            
+            let frame2 = Sentry.Frame()
+            frame2.function = "main"
+            
+            let thread2 = SentryThread(threadId: 1)
+            thread2.stacktrace = SentryStacktrace(frames: [frame2], registers: [:])
+            thread2.current = false
+            
+            threadInspector.allThreads = [
+                thread2,
+                thread1
+            ]
+        } else {
+            threadInspector.allThreads = []
+        }
         
         SentrySDK.currentHub().getClient()?.threadInspector = threadInspector
     }

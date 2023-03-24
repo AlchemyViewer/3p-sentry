@@ -1,11 +1,8 @@
 import Foundation
 import Sentry
+import SentryTestUtils
 import XCTest
- 
-// This test is also executed under iOS-SwiftUITests, because
-// GitHub Actions doesn't have simulators for iOS 11 and 10.
-// That's why we need to keep it generic, without access
-// to any private part of the SDK.
+
 class SentryFileIOTrackingIntegrationTests: XCTestCase {
 
     private class Fixture {
@@ -14,10 +11,10 @@ class SentryFileIOTrackingIntegrationTests: XCTestCase {
         let fileURL: URL!
         let fileDirectory: URL!
         
-        func getOptions(enableAutoPerformanceTracking: Bool = true, enableFileIOTracking: Bool = true, enableSwizzling: Bool = true, tracesSampleRate: NSNumber = 1) -> Options {
+        func getOptions(enableAutoPerformanceTracing: Bool = true, enableFileIOTracing: Bool = true, enableSwizzling: Bool = true, tracesSampleRate: NSNumber = 1) -> Options {
             let result = Options()
-            result.enableAutoPerformanceTracking = enableAutoPerformanceTracking
-            result.enableFileIOTracking = enableFileIOTracking
+            result.enableAutoPerformanceTracing = enableAutoPerformanceTracing
+            result.enableFileIOTracing = enableFileIOTracing
             result.enableSwizzling = enableSwizzling
             result.tracesSampleRate = tracesSampleRate
             return result
@@ -56,7 +53,7 @@ class SentryFileIOTrackingIntegrationTests: XCTestCase {
     }
     
     func test_WritingTrackingDisabled_forIOOption() {
-        SentrySDK.start(options: fixture.getOptions(enableFileIOTracking: false))
+        SentrySDK.start(options: fixture.getOptions(enableFileIOTracing: false))
         
         assertWriteWithNoSpans()
     }
@@ -68,7 +65,7 @@ class SentryFileIOTrackingIntegrationTests: XCTestCase {
     }
     
     func test_WritingTrackingDisabled_forAutoPerformanceTrackingOption() {
-        SentrySDK.start(options: fixture.getOptions(enableAutoPerformanceTracking: false))
+        SentrySDK.start(options: fixture.getOptions(enableAutoPerformanceTracing: false))
         
         assertWriteWithNoSpans()
     }
@@ -94,7 +91,7 @@ class SentryFileIOTrackingIntegrationTests: XCTestCase {
     }
         
     func test_ReadingTrackingDisabled_forIOOption() {
-        SentrySDK.start(options: fixture.getOptions(enableFileIOTracking: false))
+        SentrySDK.start(options: fixture.getOptions(enableFileIOTracing: false))
         
         assertWriteWithNoSpans()
     }
@@ -106,7 +103,7 @@ class SentryFileIOTrackingIntegrationTests: XCTestCase {
     }
     
     func test_ReadingTrackingDisabled_forAutoPerformanceTrackingOption() {
-        SentrySDK.start(options: fixture.getOptions(enableAutoPerformanceTracking: false))
+        SentrySDK.start(options: fixture.getOptions(enableAutoPerformanceTracing: false))
         
         assertWriteWithNoSpans()
     }
@@ -191,7 +188,7 @@ class SentryFileIOTrackingIntegrationTests: XCTestCase {
         ?? bundle.path(forResource: "fatal-error-binary-images-message2", ofType: "json")
     }
     
-    func test_DataConsistency_readUrl_disabled() {
+    func test_DataConsistency_readUrl() {
         SentrySDK.start(options: fixture.getOptions())
         
         let randomValue = UUID().uuidString
@@ -205,7 +202,7 @@ class SentryFileIOTrackingIntegrationTests: XCTestCase {
         XCTAssertEqual(randomValue, readValue)
     }
     
-    func test_DataConsistency_readPath_disabled() {
+    func test_DataConsistency_readPath() {
         SentrySDK.start(options: fixture.getOptions())
         
         let randomValue = UUID().uuidString
@@ -238,7 +235,7 @@ class SentryFileIOTrackingIntegrationTests: XCTestCase {
         
         XCTAssertEqual(children.count, spansCount)
         if let first = children.first {
-            XCTAssertEqual(first.context.operation, operation)         
+            XCTAssertEqual(first.operation, operation)         
         }
     }
 }

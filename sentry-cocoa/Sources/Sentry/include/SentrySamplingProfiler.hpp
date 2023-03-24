@@ -4,6 +4,7 @@
 
 #if SENTRY_TARGET_PROFILING_SUPPORTED
 
+#    include <atomic>
 #    include <cstdint>
 #    include <functional>
 #    include <mach/mach.h>
@@ -57,7 +58,7 @@ namespace profiling {
         std::function<void(const Backtrace &)> callback_;
         std::shared_ptr<ThreadMetadataCache> cache_;
         bool isInitialized_;
-        std::mutex lock_;
+        std::mutex isSamplingLock_;
         bool isSampling_;
         std::thread thread_;
         clock_serv_t clock_;

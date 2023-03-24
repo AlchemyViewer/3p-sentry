@@ -1,6 +1,7 @@
 #import "SentryUIViewControllerSwizzling.h"
 #import "SentryDefaultObjCRuntimeWrapper.h"
 #import "SentryLog.h"
+#import "SentryNSProcessInfoWrapper.h"
 #import "SentrySubClassFinder.h"
 #import "SentrySwizzle.h"
 #import "SentryUIViewControllerPerformanceTracker.h"
@@ -14,12 +15,12 @@
 #    import <UIKit/UIKit.h>
 
 /**
- * 'swizzleRootViewControllerFromUIApplication:' requires an object that conforms to
- * 'SentryUIApplication' to swizzle it, this way, instead of relying on UIApplication, we can test
- * with a mock class.
+ * @c swizzleRootViewControllerFromUIApplication: requires an object that conforms to
+ * @c SentryUIApplication to swizzle it, this way, instead of relying on @c UIApplication, we can
+ * test with a mock class.
  *
- * This category makes UIApplication conform to
- * SentryUIApplication in order to be used by 'SentryUIViewControllerSwizzling'.
+ * This category makes @c UIApplication conform to
+ * @c SentryUIApplication in order to be used by @c SentryUIViewControllerSwizzling .
  */
 @interface
 UIApplication (SentryUIApplication) <SentryUIApplication>
@@ -33,6 +34,7 @@ SentryUIViewControllerSwizzling ()
 @property (nonatomic, strong) id<SentryObjCRuntimeWrapper> objcRuntimeWrapper;
 @property (nonatomic, strong) SentrySubClassFinder *subClassFinder;
 @property (nonatomic, strong) NSMutableSet<NSString *> *imagesActedOnSubclassesOfUIViewControllers;
+@property (nonatomic, strong) SentryNSProcessInfoWrapper *processInfoWrapper;
 
 @end
 
@@ -42,6 +44,7 @@ SentryUIViewControllerSwizzling ()
                   dispatchQueue:(SentryDispatchQueueWrapper *)dispatchQueue
              objcRuntimeWrapper:(id<SentryObjCRuntimeWrapper>)objcRuntimeWrapper
                  subClassFinder:(SentrySubClassFinder *)subClassFinder
+             processInfoWrapper:(SentryNSProcessInfoWrapper *)processInfoWrapper
 {
     if (self = [super init]) {
         self.inAppLogic = [[SentryInAppLogic alloc] initWithInAppIncludes:options.inAppIncludes
@@ -50,6 +53,7 @@ SentryUIViewControllerSwizzling ()
         self.objcRuntimeWrapper = objcRuntimeWrapper;
         self.subClassFinder = subClassFinder;
         self.imagesActedOnSubclassesOfUIViewControllers = [NSMutableSet new];
+        self.processInfoWrapper = processInfoWrapper;
     }
 
     return self;
@@ -90,6 +94,17 @@ SentryUIViewControllerSwizzling ()
         }
 
         [self swizzleAllSubViewControllersInApp:app];
+    } else {
+        // If we can't find an UIApplication instance we may use the current process path as the
+        // image name. This mostly happens with SwiftUI projects.
+        NSString *processImage = self.processInfoWrapper.processPath;
+        if (processImage) {
+            [self swizzleUIViewControllersOfImage:processImage];
+        } else {
+            SENTRY_LOG_DEBUG(
+                @"UIViewControllerSwizziling: Did not found image name from current process. "
+                @"Skipping Swizzling of view controllers");
+        }
     }
 
     [self swizzleUIViewController];
@@ -154,6 +169,11 @@ SentryUIViewControllerSwizzling ()
         return;
     }
 
+    [self swizzleUIViewControllersOfImage:imageName];
+}
+
+- (void)swizzleUIViewControllersOfImage:(NSString *)imageName
+{
     if ([imageName containsString:@"UIKitCore"]) {
         SENTRY_LOG_DEBUG(@"UIViewControllerSwizziling: Skipping UIKitCore.");
         return;
@@ -189,8 +209,8 @@ SentryUIViewControllerSwizzling ()
 
 /**
  * If the iOS version is 13 or newer, and the project does not use a custom Window initialization
- * the app uses a UIScenes to manage windows instead of the old AppDelegate.
- * We wait for the first scene to connect to the app in order to find the rootViewController.
+ * the app uses a @c UIScene to manage windows instead of the old AppDelegate.
+ * We wait for the first scene to connect to the app in order to find the @c rootViewController.
  */
 - (void)swizzleRootViewControllerFromSceneDelegateNotification:(NSNotification *)notification
 {
@@ -286,11 +306,10 @@ SentryUIViewControllerSwizzling ()
 }
 
 /**
- * We need to swizzle UIViewController 'loadView'
- * because we can`t do it for controllers that use Nib files
- * (see `swizzleLoadView` for more information).
- * SentryUIViewControllerPerformanceTracker makes sure we don't get two spans
- * if the loadView of an actual UIViewController is swizzled.
+ * We need to swizzle @c -[UIViewController @c loadView] because we can't do it for controllers that
+ * use Nib files (see @c swizzleLoadView for more information).
+ * @c SentryUIViewControllerPerformanceTracker makes sure we don't get two spans
+ * if the @c -[loadView] of an actual @c UIViewController is swizzled.
  */
 - (void)swizzleUIViewController
 {

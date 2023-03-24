@@ -38,10 +38,8 @@ static const struct {
     MONITORTYPE(SentryCrashMonitorTypeSignal),
     MONITORTYPE(SentryCrashMonitorTypeCPPException),
     MONITORTYPE(SentryCrashMonitorTypeNSException),
-    MONITORTYPE(SentryCrashMonitorTypeUserReported),
     MONITORTYPE(SentryCrashMonitorTypeSystem),
     MONITORTYPE(SentryCrashMonitorTypeApplicationState),
-    MONITORTYPE(SentryCrashMonitorTypeZombie),
 };
 static const int g_monitorTypesCount = sizeof(g_monitorTypes) / sizeof(*g_monitorTypes);
 
