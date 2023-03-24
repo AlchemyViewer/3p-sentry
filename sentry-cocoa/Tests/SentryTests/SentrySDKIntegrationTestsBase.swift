@@ -1,4 +1,5 @@
 import Foundation
+import SentryTestUtils
 import XCTest
 
 class SentrySDKIntegrationTestsBase: XCTestCase {
@@ -22,15 +23,23 @@ class SentrySDKIntegrationTestsBase: XCTestCase {
         clearTestState()
     }
     
-    func givenSdkWithHub(_ options: Options? = nil) {
-        let client = TestClient(options: options ?? self.options)!
-        let hub = SentryHub(client: client, andScope: Scope(), andCrashWrapper: TestSentryCrashWrapper.sharedInstance(), andCurrentDateProvider: currentDate)
+    func givenSdkWithHub(_ options: Options? = nil, scope: Scope = Scope()) {
+        let client = TestClient(options: options ?? self.options)
+        let hub = SentryHub(client: client, andScope: scope, andCrashWrapper: TestSentryCrashWrapper.sharedInstance(), andCurrentDateProvider: currentDate)
         
         SentrySDK.setCurrentHub(hub)
     }
     
     func givenSdkWithHubButNoClient() {
         SentrySDK.setCurrentHub(SentryHub(client: nil, andScope: nil))
+    }
+    
+    func assertNoEventCaptured() {
+        guard let client = SentrySDK.currentHub().getClient() as? TestClient else {
+            XCTFail("Hub Client is not a `TestClient`")
+            return
+        }
+        XCTAssertEqual(0, client.captureEventInvocations.count, "No event should be captured.")
     }
     
     func assertEventCaptured(_ callback: (Event?) -> Void) {

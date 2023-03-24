@@ -1,3 +1,4 @@
+import SentryTestUtils
 import XCTest
 
 #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
@@ -5,7 +6,7 @@ class SentryFramesTrackingIntegrationTests: XCTestCase {
 
     private class Fixture {
         let options = Options()
-        let displayLink = TestDiplayLinkWrapper()
+        let displayLink = TestDisplayLinkWrapper()
         
         init() {
             options.dsn = TestConstants.dsnAsString(username: "SentryFramesTrackingIntegrationTests")
@@ -56,7 +57,7 @@ class SentryFramesTrackingIntegrationTests: XCTestCase {
     func testAutoPerformanceTrackingDisabled_DoesNotMeasureFrames() {
         let options = fixture.options
         options.tracesSampleRate = 0.1
-        options.enableAutoPerformanceTracking = false
+        options.enableAutoPerformanceTracing = false
         sut.install(with: options)
         
         XCTAssertNil(Dynamic(sut).tracker.asObject)
@@ -66,7 +67,7 @@ class SentryFramesTrackingIntegrationTests: XCTestCase {
         PrivateSentrySDKOnly.framesTrackingMeasurementHybridSDKMode = true
         
         let options = fixture.options
-        options.enableAutoPerformanceTracking = false
+        options.enableAutoPerformanceTracing = false
         sut.install(with: options)
         
         XCTAssertNotNil(Dynamic(sut).tracker.asObject)
@@ -85,7 +86,7 @@ class SentryFramesTrackingIntegrationTests: XCTestCase {
     
     func test_FramesTracking_Disabled() {
         let options = Options()
-        options.enableAutoPerformanceTracking = false
+        options.enableAutoPerformanceTracing = false
         
         let result = fixture.sut.install(with: options)
         

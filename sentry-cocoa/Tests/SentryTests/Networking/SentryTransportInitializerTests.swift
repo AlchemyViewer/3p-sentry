@@ -1,22 +1,18 @@
 @testable import Sentry
+import SentryTestUtils
 import XCTest
 
 class SentryTransportInitializerTests: XCTestCase {
     
     private static let dsnAsString = TestConstants.dsnAsString(username: "SentryTransportInitializerTests")
-    private static let dsn = TestConstants.dsn(username: "SentryTransportInitializerTests")
     
     private var fileManager: SentryFileManager!
     
     override func setUp() {
         super.setUp()
-        do {
-            let options = Options()
-            options.dsn = SentryTransportInitializerTests.dsnAsString
-            fileManager = try SentryFileManager(options: options, andCurrentDateProvider: TestCurrentDateProvider())
-        } catch {
-            XCTFail("SentryDsn could not be created")
-        }
+        let options = Options()
+        options.dsn = SentryTransportInitializerTests.dsnAsString
+        fileManager = try! SentryFileManager(options: options, andCurrentDateProvider: TestCurrentDateProvider(), dispatchQueueWrapper: TestSentryDispatchQueueWrapper())
     }
 
     func testDefault() throws {

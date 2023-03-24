@@ -1,3 +1,4 @@
+import SentryTestUtils
 import XCTest
 
 class SentryCrashReportSinkTests: SentrySDKIntegrationTestsBase {
@@ -52,8 +53,8 @@ class SentryCrashReportSinkTests: SentrySDKIntegrationTestsBase {
         filterReportWithAttachment()
         
         let client = getTestClient()
-        XCTAssertEqual(1, client.flushInvoctions.count)
-        XCTAssertEqual(5, client.flushInvoctions.first)
+        XCTAssertEqual(1, client.flushInvocations.count)
+        XCTAssertEqual(5, client.flushInvocations.first)
         XCTAssertEqual(0, fixture.dispatchQueue.dispatchAsyncCalled)
     }
     
@@ -63,8 +64,8 @@ class SentryCrashReportSinkTests: SentrySDKIntegrationTestsBase {
         filterReportWithAttachment()
         
         let client = getTestClient()
-        XCTAssertEqual(1, client.flushInvoctions.count)
-        XCTAssertEqual(5, client.flushInvoctions.first)
+        XCTAssertEqual(1, client.flushInvocations.count)
+        XCTAssertEqual(5, client.flushInvocations.first)
         XCTAssertEqual(0, fixture.dispatchQueue.dispatchAsyncCalled)
     }
     
@@ -74,7 +75,7 @@ class SentryCrashReportSinkTests: SentrySDKIntegrationTestsBase {
         filterReportWithAttachment()
         
         let client = getTestClient()
-        XCTAssertEqual(0, client.flushInvoctions.count)
+        XCTAssertEqual(0, client.flushInvocations.count)
         XCTAssertEqual(1, fixture.dispatchQueue.dispatchAsyncCalled)
     }
     
@@ -84,17 +85,17 @@ class SentryCrashReportSinkTests: SentrySDKIntegrationTestsBase {
         filterReportWithAttachment()
         
         let client = getTestClient()
-        XCTAssertEqual(0, client.flushInvoctions.count)
+        XCTAssertEqual(0, client.flushInvocations.count)
         XCTAssertEqual(1, fixture.dispatchQueue.dispatchAsyncCalled)
     }
     
     func testAppStartCrash_DurationTooBig_DoesNotCallFlush() {
-        fixture.crashWrapper.internalDurationFromCrashStateInitToLastCrash = 2.000_01
+        fixture.crashWrapper.internalDurationFromCrashStateInitToLastCrash = 2.00001
         
         filterReportWithAttachment()
         
         let client = getTestClient()
-        XCTAssertEqual(0, client.flushInvoctions.count)
+        XCTAssertEqual(0, client.flushInvocations.count)
         XCTAssertEqual(1, fixture.dispatchQueue.dispatchAsyncCalled)
     }
     

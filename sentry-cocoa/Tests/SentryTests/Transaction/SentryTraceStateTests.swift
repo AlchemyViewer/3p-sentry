@@ -1,3 +1,4 @@
+import SentryTestUtils
 import XCTest
 
 class SentryTraceContextTests: XCTestCase {
@@ -32,7 +33,7 @@ class SentryTraceContextTests: XCTestCase {
             scope.userObject?.segment = userSegment
             scope.span = tracer
             
-            traceId = tracer.context.traceId
+            traceId = tracer.traceId
         }
     }
     

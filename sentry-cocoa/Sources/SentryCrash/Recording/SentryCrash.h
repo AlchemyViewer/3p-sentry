@@ -100,13 +100,6 @@ static NSString *const SENTRYCRASH_REPORT_ATTACHMENTS_ITEM = @"attachments";
  */
 @property (nonatomic, readwrite, assign) BOOL introspectMemory;
 
-/** If YES, monitor all Objective-C/Swift deallocations and keep track of any
- * accesses after deallocation.
- *
- * Default: NO
- */
-@property (nonatomic, readwrite, assign) BOOL catchZombies;
-
 /** List of Objective-C classes that should never be introspected.
  * Whenever a class in this list is encountered, only the class name will be
  * recorded. This can be useful for information security concerns.
@@ -153,11 +146,6 @@ static NSString *const SENTRYCRASH_REPORT_ATTACHMENTS_ITEM = @"attachments";
 /** Exposes the uncaughtExceptionHandler if set from SentryCrash. Is nil if
  * debugger is running. **/
 @property (nonatomic, assign) NSUncaughtExceptionHandler *uncaughtExceptionHandler;
-
-/** Exposes the currentSnapshotUserReportedExceptionHandler if set from
- * SentryCrash. Is nil if debugger is running. **/
-@property (nonatomic, assign)
-    NSUncaughtExceptionHandler *currentSnapshotUserReportedExceptionHandler;
 
 #pragma mark - Information -
 

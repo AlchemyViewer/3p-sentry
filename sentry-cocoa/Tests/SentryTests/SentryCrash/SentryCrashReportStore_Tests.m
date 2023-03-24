@@ -57,6 +57,7 @@
 
     int64_t reportID = 0;
     sscanf(filename, scanFormat, &reportID);
+
     return reportID;
 }
 
@@ -141,7 +142,7 @@
     XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:self.reportStorePath]);
 }
 
-- (void)testCrashReportCount1_disabled
+- (void)testCrashReportCount1
 {
     [self prepareReportStoreWithPathEnd:@"testCrashReportCount1"];
     NSString *reportContents = @"Testing";

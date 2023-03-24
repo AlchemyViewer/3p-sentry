@@ -1,4 +1,3 @@
-#import "SentryPermissionsObserver.h"
 #import "SentryRandom.h"
 #import "SentryTransport.h"
 #import <Sentry/Sentry.h>
@@ -7,20 +6,29 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/** Expose the internal test init for testing. */
 @interface
-SentryClient (TestInit)
+SentryClient ()
 
 - (_Nullable instancetype)initWithOptions:(SentryOptions *)options
-                      permissionsObserver:(SentryPermissionsObserver *)permissionsObserver;
+                            dispatchQueue:(SentryDispatchQueueWrapper *)dispatchQueue
+                   deleteOldEnvelopeItems:(BOOL)deleteOldEnvelopeItems;
+
+- (_Nullable instancetype)initWithOptions:(SentryOptions *)options
+                              fileManager:(SentryFileManager *)fileManager
+                   deleteOldEnvelopeItems:(BOOL)deleteOldEnvelopeItems;
+
+- (instancetype)initWithOptions:(SentryOptions *)options
+                    fileManager:(SentryFileManager *)fileManager
+         deleteOldEnvelopeItems:(BOOL)deleteOldEnvelopeItems
+               transportAdapter:(SentryTransportAdapter *)transportAdapter;
 
 - (instancetype)initWithOptions:(SentryOptions *)options
                transportAdapter:(SentryTransportAdapter *)transportAdapter
                     fileManager:(SentryFileManager *)fileManager
+         deleteOldEnvelopeItems:(BOOL)deleteOldEnvelopeItems
                 threadInspector:(SentryThreadInspector *)threadInspector
                          random:(id<SentryRandom>)random
                    crashWrapper:(SentryCrashWrapper *)crashWrapper
-            permissionsObserver:(SentryPermissionsObserver *)permissionsObserver
                   deviceWrapper:(SentryUIDeviceWrapper *)deviceWrapper
                          locale:(NSLocale *)locale
                        timezone:(NSTimeZone *)timezone;

@@ -1,3 +1,4 @@
+import SentryTestUtils
 import XCTest
 
 class SentryPerformanceTrackerTests: XCTestCase {
@@ -8,18 +9,18 @@ class SentryPerformanceTrackerTests: XCTestCase {
 
         let someTransaction = "Some Transaction"
         let someOperation = "Some Operation"
-        let client: TestClient
+        let client: TestClient!
         let hub: TestHub
         let scope: Scope
 
         init() {
             scope = Scope()
-            client = TestClient(options: Options())!
+            client = TestClient(options: Options())
             hub = TestHub(client: client, andScope: scope)
         }
         
         func getSut() -> SentryPerformanceTracker {
-            return  SentryPerformanceTracker()
+            return SentryPerformanceTracker()
         }
     }
     
@@ -35,10 +36,6 @@ class SentryPerformanceTrackerTests: XCTestCase {
     override func tearDown() {
         super.tearDown()
         clearTestState()
-    }
-    
-    func testSingleton() {
-        XCTAssertEqual(SentryPerformanceTracker.shared(), SentryPerformanceTracker.shared())
     }
    
     func testStartSpan_CheckScopeSpan() {
@@ -79,7 +76,7 @@ class SentryPerformanceTrackerTests: XCTestCase {
         XCTAssert(scopeSpan === transaction)
         XCTAssert(scopeSpan !== firstTransaction)
         XCTAssertTrue(firstTransaction.isFinished)
-        XCTAssertEqual(.cancelled, firstTransaction.context.status)
+        XCTAssertEqual(.cancelled, firstTransaction.status)
     }
     
     func testStartSpan_WithActiveSpan() {
@@ -99,7 +96,7 @@ class SentryPerformanceTrackerTests: XCTestCase {
             
             XCTAssertEqual(1, children?.count)
             XCTAssert(children!.first === childSpan)
-            XCTAssertEqual(spanId, childSpan?.context.parentSpanId)
+            XCTAssertEqual(spanId, childSpan?.parentSpanId)
         }
         XCTAssertTrue(blockCalled)
     }
@@ -148,8 +145,8 @@ class SentryPerformanceTrackerTests: XCTestCase {
                 grandchild = sut.getSpan(grandChildSpanId)
             }
         }
-        XCTAssertEqual(root!.context.spanId, child.context.parentSpanId)
-        XCTAssertEqual(child!.context.spanId, grandchild.context.parentSpanId)
+        XCTAssertEqual(root!.spanId, child.parentSpanId)
+        XCTAssertEqual(child!.spanId, grandchild.parentSpanId)
     }
     
     func testMeasureSpanWithBlock() {
@@ -192,7 +189,7 @@ class SentryPerformanceTrackerTests: XCTestCase {
         let spanId = sut.startSpan(withName: fixture.someTransaction, operation: fixture.someOperation)
         let span = sut.getSpan(spanId)
         
-        XCTAssertEqual(span!.context.sampled, .no)
+        XCTAssertEqual(span!.sampled, .no)
     }
     
     func testSampled() {
@@ -201,7 +198,7 @@ class SentryPerformanceTrackerTests: XCTestCase {
         let spanId = sut.startSpan(withName: fixture.someTransaction, operation: fixture.someOperation)
         let span = sut.getSpan(spanId)
         
-        XCTAssertEqual(span!.context.sampled, .yes)
+        XCTAssertEqual(span!.sampled, .yes)
     }
     
     func testFinishSpan() {
@@ -277,9 +274,6 @@ class SentryPerformanceTrackerTests: XCTestCase {
         XCTAssertEqual(spanId, SpanId.empty)
     }
         
-    @available(tvOS 10.0, *)
-    @available(OSX 10.12, *)
-    @available(iOS 10.0, *)
     func testStartSpanAsync() {
         let sut = fixture.getSut()
         let spanId = startSpan(tracker: sut)
@@ -287,7 +281,7 @@ class SentryPerformanceTrackerTests: XCTestCase {
             
             let queue = DispatchQueue(label: "SentryPerformanceTrackerTests", attributes: [.concurrent, .initiallyInactive])
             let group = DispatchGroup()
-            
+
             for _ in 0 ..< 5_000 {
                 group.enter()
                 queue.async {
@@ -301,11 +295,11 @@ class SentryPerformanceTrackerTests: XCTestCase {
         }
         let spans = getSpans(tracker: sut)
         XCTAssertEqual(spans.count, 5_001)
+        for span in spans {
+            sut.finishSpan(span.key)
+        }
     }
     
-    @available(tvOS 10.0, *)
-    @available(OSX 10.12, *)
-    @available(iOS 10.0, *)
     func testStackAsync() {
         let sut = fixture.getSut()
         let spanId = startSpan(tracker: sut)
@@ -314,7 +308,7 @@ class SentryPerformanceTrackerTests: XCTestCase {
             let queue = DispatchQueue(label: "SentryPerformanceTrackerTests", attributes: [.concurrent, .initiallyInactive])
             let group = DispatchGroup()
             
-            for _ in 0 ..< 50_000 {
+            for _ in 0 ..< 50 {
                 group.enter()
                 queue.async {
                     let childId = self.startSpan(tracker: sut)

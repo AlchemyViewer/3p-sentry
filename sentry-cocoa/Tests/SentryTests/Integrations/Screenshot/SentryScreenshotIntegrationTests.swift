@@ -1,4 +1,5 @@
 import Sentry
+import SentryTestUtils
 import XCTest
 
 #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
@@ -112,6 +113,14 @@ class SentryScreenshotIntegrationTests: XCTestCase {
         event.isCrashEvent = true
         
         let newAttachmentList = sut.processAttachments([], for: event)
+        
+        XCTAssertEqual(newAttachmentList?.count, 0)
+    }
+    
+    func test_noScreenShot_MetricKitEvent() {
+        let sut = fixture.getSut()
+        
+        let newAttachmentList = sut.processAttachments([], for: TestData.metricKitEvent)
         
         XCTAssertEqual(newAttachmentList?.count, 0)
     }

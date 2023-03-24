@@ -1,4 +1,5 @@
 import ObjectiveC
+import SentryTestUtils
 import XCTest
 
 #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
@@ -57,7 +58,7 @@ class SentrySubClassFinderTests: XCTestCase {
         assertActOnSubclassesOfViewController(expected: [], imageName: "OtherImage")
     }
   
-    func testGettingSublcasses_DoesNotCallInitializer() {
+    func testGettingSubclasses_DoesNotCallInitializer() {
         let sut = SentrySubClassFinder(dispatchQueue: TestSentryDispatchQueueWrapper(), objcRuntimeWrapper: fixture.runtimeWrapper)
         
         var actual: [AnyClass] = []

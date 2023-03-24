@@ -1,3 +1,4 @@
+import SentryTestUtils
 import XCTest
 
 #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
@@ -5,17 +6,15 @@ class SentryFramesTrackerTests: XCTestCase {
     
     private class Fixture {
         
-        var displayLinkWrapper: TestDiplayLinkWrapper
+        var displayLinkWrapper: TestDisplayLinkWrapper
         var queue: DispatchQueue
         
         init() {
-            displayLinkWrapper = TestDiplayLinkWrapper()
+            displayLinkWrapper = TestDisplayLinkWrapper()
             queue = DispatchQueue(label: "SentryFramesTrackerTests", qos: .background, attributes: [.concurrent])
         }
         
-        lazy var sut: SentryFramesTracker = {
-            return SentryFramesTracker(displayLinkWrapper: displayLinkWrapper)
-        }()
+        lazy var sut: SentryFramesTracker = SentryFramesTracker(displayLinkWrapper: displayLinkWrapper)
     }
     
     private var fixture: Fixture!
@@ -42,7 +41,7 @@ class SentryFramesTrackerTests: XCTestCase {
         XCTAssertFalse(sut.isRunning)
     }
     
-    func testSlowFrame() {
+    func testSlowFrame() throws {
         let sut = fixture.sut
         sut.start()
         
@@ -51,10 +50,10 @@ class SentryFramesTrackerTests: XCTestCase {
         fixture.displayLinkWrapper.normalFrame()
         fixture.displayLinkWrapper.almostFrozenFrame()
 
-        assert(slow: 2, frozen: 0, total: 3)
+        try assert(slow: 2, frozen: 0, total: 3)
     }
     
-    func testFrozenFrame() {
+    func testFrozenFrame() throws {
         let sut = fixture.sut
         sut.start()
         
@@ -62,10 +61,22 @@ class SentryFramesTrackerTests: XCTestCase {
         fixture.displayLinkWrapper.slowFrame()
         fixture.displayLinkWrapper.frozenFrame()
 
-        assert(slow: 1, frozen: 1, total: 2)
+        try assert(slow: 1, frozen: 1, total: 2)
+    }
+
+    func testFrameRateChange() throws {
+        let sut = fixture.sut
+        sut.start()
+
+        fixture.displayLinkWrapper.call()
+        fixture.displayLinkWrapper.slowFrame()
+        fixture.displayLinkWrapper.changeFrameRate(120.0)
+        fixture.displayLinkWrapper.frozenFrame()
+
+        try assert(slow: 1, frozen: 1, total: 2, frameRates: 2)
     }
     
-    func testAllFrames_ConcurrentRead() {
+    func testAllFrames_ConcurrentRead() throws {
         let sut = fixture.sut
         sut.start()
         
@@ -86,10 +97,10 @@ class SentryFramesTrackerTests: XCTestCase {
         }
         
         group.wait()
-        assert(slow: frames, frozen: frames, total: 3 * frames)
+        try assert(slow: frames, frozen: frames, total: 3 * frames)
     }
     
-    func testPerformanceOfTrackingFrames() {
+    func testPerformanceOfTrackingFrames() throws {
         let sut = fixture.sut
         sut.start()
         
@@ -100,12 +111,12 @@ class SentryFramesTrackerTests: XCTestCase {
             }
         }
 
-        assert(slow: 0, frozen: 0)
+        try assert(slow: 0, frozen: 0)
     }
 }
 
 private extension SentryFramesTrackerTests {
-    func assert(slow: UInt? = nil, frozen: UInt? = nil, total: UInt? = nil) {
+    func assert(slow: UInt? = nil, frozen: UInt? = nil, total: UInt? = nil, frameRates: UInt? = nil) throws {
         let currentFrames = fixture.sut.currentFrames
         if let total = total {
             XCTAssertEqual(total, currentFrames.total)
@@ -116,18 +127,41 @@ private extension SentryFramesTrackerTests {
         if let frozen = frozen {
             XCTAssertEqual(frozen, currentFrames.frozen)
         }
-#if SENTRY_TARGET_PROFILING_SUPPORTED
-        if ((slow ?? 0) + (frozen ?? 0)) > 0 {
-            XCTAssertGreaterThan(currentFrames.frameTimestamps.count, 0)
-            for frame in currentFrames.frameTimestamps {
-                XCTAssertFalse(frame["start_timestamp"] == frame["end_timestamp"])
-            }
-        }
-        XCTAssertGreaterThan(currentFrames.frameRateTimestamps.count, 0)
+
+#if os(iOS) || os(macOS) || targetEnvironment(macCatalyst)
+        try  assertProfilingData(slow: slow, frozen: frozen, frameRates: frameRates)
 #endif
     }
 
-    private func assertPreviousCountLesserThanCurrent(_ group: DispatchGroup, count: @escaping () -> UInt) {
+#if os(iOS) || os(macOS) || targetEnvironment(macCatalyst)
+    func assertProfilingData(slow: UInt? = nil, frozen: UInt? = nil, frameRates: UInt? = nil) throws {
+        func assertStartAndEndOrdering(frame: [String: NSNumber]) throws {
+            let start = try XCTUnwrap(frame["start_timestamp"], "Expected a start timestamp for the frame.")
+            let end = try XCTUnwrap(frame["end_timestamp"], "Expected an end timestamp for the frame.")
+            XCTAssert(start.compare(end) != .orderedDescending)
+        }
+
+        let currentFrames = fixture.sut.currentFrames
+
+        if let slow = slow {
+            XCTAssertEqual(currentFrames.slowFrameTimestamps.count, Int(slow))
+            for frame in currentFrames.slowFrameTimestamps {
+                try assertStartAndEndOrdering(frame: frame)
+            }
+        }
+        if let frozen = frozen {
+            XCTAssertEqual(currentFrames.frozenFrameTimestamps.count, Int(frozen))
+            for frame in currentFrames.frozenFrameTimestamps {
+                try assertStartAndEndOrdering(frame: frame)
+            }
+        }
+        if let frameRates = frameRates {
+            XCTAssertEqual(currentFrames.frameRateTimestamps.count, Int(frameRates))
+        }
+    }
+#endif
+
+    func assertPreviousCountLesserThanCurrent(_ group: DispatchGroup, count: @escaping () -> UInt) {
         group.enter()
         fixture.queue.async {
             var previousCount: UInt = 0

@@ -1,4 +1,5 @@
 @testable import Sentry
+import SentryTestUtils
 import XCTest
 
 class SentrySystemEventBreadcrumbsTest: XCTestCase {
@@ -8,8 +9,10 @@ class SentrySystemEventBreadcrumbsTest: XCTestCase {
     
     private class Fixture {
         let options: Options
-        let fileManager: SentryFileManager
+        let delegate = SentrySystemEventBreadcrumbTestDelegate()
+        let fileManager: TestFileManager
         var currentDateProvider = TestCurrentDateProvider()
+        let notificationCenterWrapper = TestNSNotificationCenterWrapper()
 
         init() {
             options = Options()
@@ -18,16 +21,17 @@ class SentrySystemEventBreadcrumbsTest: XCTestCase {
             options.sessionTrackingIntervalMillis = 10_000
             options.environment = "debug"
 
-            fileManager = try! SentryFileManager(options: options, andCurrentDateProvider: currentDateProvider)
+            fileManager = try! TestFileManager(options: options, andCurrentDateProvider: currentDateProvider)
         }
 
-        func getSut(scope: Scope, currentDevice: UIDevice? = UIDevice.current) -> SentrySystemEventBreadcrumbs {
-            let client = Client(options: self.options)
-            let hub = SentryHub(client: client, andScope: scope)
-            SentrySDK.setCurrentHub(hub)
-
-            let systemEvents = SentrySystemEventBreadcrumbs(fileManager: fileManager, andCurrentDateProvider: currentDateProvider)!
-            systemEvents.start(currentDevice)
+        func getSut(currentDevice: UIDevice? = UIDevice.current) -> SentrySystemEventBreadcrumbs {
+            let systemEvents = SentrySystemEventBreadcrumbs(
+                fileManager: fileManager,
+                andCurrentDateProvider: currentDateProvider,
+                andNotificationCenterWrapper: notificationCenterWrapper
+            )
+            systemEvents.start(with: self.delegate, currentDevice: currentDevice)
+            
             return systemEvents
         }
     }
@@ -67,85 +71,76 @@ class SentrySystemEventBreadcrumbsTest: XCTestCase {
     func testBatteryLevelBreadcrumb() {
         let currentDevice = MyUIDevice(batteryLevel: 0.56, batteryState: UIDevice.BatteryState.full)
         
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: currentDevice)
+        sut = fixture.getSut(currentDevice: currentDevice)
         
-        NotificationCenter.default.post(Notification(name: UIDevice.batteryLevelDidChangeNotification, object: currentDevice))
+        _ = fixture.getSut(currentDevice: currentDevice)
         
-        assertBatteryBreadcrumb(scope: scope, charging: true, level: 56)
+        postBatteryLevelNotification(uiDevice: currentDevice)
+        
+        assertBatteryBreadcrumb( charging: true, level: 56)
     }
     
     func testBatteryUnknownLevelBreadcrumb() {
         let currentDevice = MyUIDevice(batteryLevel: -1, batteryState: UIDevice.BatteryState.unknown)
         
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: currentDevice)
+        sut = fixture.getSut(currentDevice: currentDevice)
         
-        NotificationCenter.default.post(Notification(name: UIDevice.batteryLevelDidChangeNotification, object: currentDevice))
+        postBatteryLevelNotification(uiDevice: currentDevice)
         
-        assertBatteryBreadcrumb(scope: scope, charging: false, level: -1)
+        assertBatteryBreadcrumb(charging: false, level: -1)
     }
     
     func testBatteryNotUnknownButNoLevelBreadcrumb() {
         let currentDevice = MyUIDevice(batteryLevel: -1, batteryState: UIDevice.BatteryState.full)
         
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: currentDevice)
+        sut = fixture.getSut(currentDevice: currentDevice)
         
-        NotificationCenter.default.post(Notification(name: UIDevice.batteryLevelDidChangeNotification, object: currentDevice))
+        postBatteryLevelNotification(uiDevice: currentDevice)
         
-        assertBatteryBreadcrumb(scope: scope, charging: true, level: -1)
+        assertBatteryBreadcrumb(charging: true, level: -1)
     }
     
     func testBatteryChargingStateBreadcrumb() {
         let currentDevice = MyUIDevice()
         
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: currentDevice)
+        sut = fixture.getSut(currentDevice: currentDevice)
         
-        NotificationCenter.default.post(Notification(name: UIDevice.batteryStateDidChangeNotification, object: currentDevice))
+        postBatteryLevelNotification(uiDevice: currentDevice)
         
-        assertBatteryBreadcrumb(scope: scope, charging: true, level: 100)
+        assertBatteryBreadcrumb(charging: true, level: 100)
     }
     
     func testBatteryNotChargingStateBreadcrumb() {
         let currentDevice = MyUIDevice(batteryState: UIDevice.BatteryState.unplugged)
         
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: currentDevice)
+        sut = fixture.getSut(currentDevice: currentDevice)
         
         NotificationCenter.default.post(Notification(name: UIDevice.batteryStateDidChangeNotification, object: currentDevice))
         
-        assertBatteryBreadcrumb(scope: scope, charging: false, level: 100)
+        assertBatteryBreadcrumb(charging: false, level: 100)
     }
     
-    private func assertBatteryBreadcrumb(scope: Scope, charging: Bool, level: Float) {
-        let ser = scope.serialize()
+    private func assertBatteryBreadcrumb(charging: Bool, level: Float) {
         
-        XCTAssertNotNil(ser["breadcrumbs"] as? [[String: Any]], "no scope.breadcrumbs")
-        
-        if let breadcrumbs = ser["breadcrumbs"] as? [[String: Any]] {
+        XCTAssertEqual(1, fixture.delegate.addCrumbInvocations.count)
             
-            XCTAssertNotNil(breadcrumbs.first, "scope.breadcrumbs is empty")
+        if let crumb = fixture.delegate.addCrumbInvocations.first {
             
-            if let crumb = breadcrumbs.first {
+            XCTAssertEqual("device.event", crumb.category)
+            XCTAssertEqual("system", crumb.type)
+            XCTAssertEqual(SentryLevel.info, crumb.level)
+            
+            XCTAssertNotNil(crumb.data, "no breadcrumb.data")
+            
+            if let data = crumb.data {
                 
-                XCTAssertEqual("device.event", crumb["category"] as? String)
-                XCTAssertEqual("system", crumb["type"] as? String)
-                XCTAssertEqual("info", crumb["level"] as? String)
-                
-                XCTAssertNotNil(crumb["data"] as? [String: Any], "no breadcrumb.data")
-                
-                if let data = crumb["data"] as? [String: Any] {
-                    
-                    XCTAssertEqual("BATTERY_STATE_CHANGE", data["action"] as? String)
-                    XCTAssertEqual(charging, data["plugged"] as? Bool)
-                    // -1 = unknown
-                    if level == -1 {
-                        XCTAssertNil(data["level"])
-                    } else {
-                        XCTAssertEqual(level, data["level"] as? Float)
-                    }
+                XCTAssertEqual("BATTERY_STATE_CHANGE", data["action"] as? String)
+                XCTAssertEqual(charging, data["plugged"] as? Bool)
+                // -1 = unknown
+                if level == -1 {
+                    XCTAssertNil(data["level"])
+                } else {
+                    XCTAssertEqual(level, data["level"] as? Float)
                 }
             }
         }
@@ -154,148 +149,144 @@ class SentrySystemEventBreadcrumbsTest: XCTestCase {
     func testPortraitOrientationBreadcrumb() {
         let currentDevice = MyUIDevice()
         
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: currentDevice)
+        sut = fixture.getSut(currentDevice: currentDevice)
         
         NotificationCenter.default.post(Notification(name: UIDevice.orientationDidChangeNotification, object: currentDevice))
-        assertPositionOrientationBreadcrumb(position: "portrait", scope: scope)
+        assertPositionOrientationBreadcrumb(position: "portrait")
     }
     
     func testLandscapeOrientationBreadcrumb() {
         let currentDevice = MyUIDevice(orientation: UIDeviceOrientation.landscapeLeft)
         
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: currentDevice)
+        sut = fixture.getSut(currentDevice: currentDevice)
         
         NotificationCenter.default.post(Notification(name: UIDevice.orientationDidChangeNotification, object: currentDevice))
-        assertPositionOrientationBreadcrumb(position: "landscape", scope: scope)
+        assertPositionOrientationBreadcrumb(position: "landscape")
     }
     
     func testUnknownOrientationBreadcrumb() {
         let currentDevice = MyUIDevice(orientation: UIDeviceOrientation.unknown)
         
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: currentDevice)
+        sut = fixture.getSut(currentDevice: currentDevice)
         
         NotificationCenter.default.post(Notification(name: UIDevice.orientationDidChangeNotification, object: currentDevice))
-        let ser = scope.serialize()
         
-        XCTAssertNil(ser["breadcrumbs"], "there are breadcrumbs")
+        XCTAssertEqual(0, fixture.delegate.addCrumbInvocations.count, "there are breadcrumbs")
     }
     
-    private func assertPositionOrientationBreadcrumb(position: String, scope: Scope) {
-        let ser = scope.serialize()
+    private func assertPositionOrientationBreadcrumb(position: String) {
         
-        XCTAssertNotNil(ser["breadcrumbs"] as? [[String: Any]], "no scope.breadcrumbs")
+        XCTAssertEqual(1, fixture.delegate.addCrumbInvocations.count)
         
-        if let breadcrumbs = ser["breadcrumbs"] as? [[String: Any]] {
+        if let crumb = fixture.delegate.addCrumbInvocations.first {
             
-            XCTAssertNotNil(breadcrumbs.first, "scope.breadcrumbs is empty")
+            XCTAssertEqual("device.orientation", crumb.category)
+            XCTAssertEqual("navigation", crumb.type)
+            XCTAssertEqual(SentryLevel.info, crumb.level)
             
-            if let crumb = breadcrumbs.first {
-                XCTAssertEqual("device.orientation", crumb["category"] as? String)
-                XCTAssertEqual("navigation", crumb["type"] as? String)
-                XCTAssertEqual("info", crumb["level"] as? String)
-                
-                XCTAssertNotNil(crumb["data"] as? [String: Any], "no breadcrumb.data")
-                
-                if let data = crumb["data"] as? [String: Any] {
-                    XCTAssertEqual(position, data["position"] as? String)
-                }
+            XCTAssertNotNil(crumb.data, "no breadcrumb.data")
+            
+            if let data = crumb.data {
+                XCTAssertEqual(position, data["position"] as? String)
             }
         }
+        
     }
     
     func testShownKeyboardBreadcrumb() {
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: nil)
+        sut = fixture.getSut(currentDevice: nil)
         
         NotificationCenter.default.post(Notification(name: UIWindow.keyboardDidShowNotification))
-        assertBreadcrumbAction(scope: scope, action: "UIKeyboardDidShowNotification")
+        
+        Dynamic(sut).systemEventTriggered(Notification(name: UIWindow.keyboardDidShowNotification))
+        
+        assertBreadcrumbAction( action: "UIKeyboardDidShowNotification")
     }
     
     func testHiddenKeyboardBreadcrumb() {
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: nil)
+        sut = fixture.getSut(currentDevice: nil)
         
-        NotificationCenter.default.post(Notification(name: UIWindow.keyboardDidHideNotification))
-        assertBreadcrumbAction(scope: scope, action: "UIKeyboardDidHideNotification")
+        Dynamic(sut).systemEventTriggered(Notification(name: UIWindow.keyboardDidHideNotification))
+        
+        assertBreadcrumbAction(action: "UIKeyboardDidHideNotification")
     }
     
     func testScreenshotBreadcrumb() {
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: nil)
+        sut = fixture.getSut(currentDevice: nil)
         
-        NotificationCenter.default.post(Notification(name: UIApplication.userDidTakeScreenshotNotification))
-        assertBreadcrumbAction(scope: scope, action: "UIApplicationUserDidTakeScreenshotNotification")
+        Dynamic(sut).systemEventTriggered(Notification(name: UIApplication.userDidTakeScreenshotNotification))
+        
+        assertBreadcrumbAction(action: "UIApplicationUserDidTakeScreenshotNotification")
     }
 
     func testTimezoneFirstTimeNilNoBreadcrumb() {
         fixture.currentDateProvider.timezoneOffsetValue = 7_200
 
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: nil)
+        sut = fixture.getSut(currentDevice: nil)
 
-        assertNoBreadcrumbAction(scope: scope, action: "TIMEZONE_CHANGE")
+        XCTAssertEqual(0, fixture.delegate.addCrumbInvocations.count)
     }
 
     func testTimezoneChangeInitialBreadcrumb() {
         fixture.fileManager.storeTimezoneOffset(0)
         fixture.currentDateProvider.timezoneOffsetValue = 7_200
 
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: nil)
+        sut = fixture.getSut(currentDevice: nil)
 
-        assertBreadcrumbAction(scope: scope, action: "TIMEZONE_CHANGE") { data in
+        assertBreadcrumbAction(action: "TIMEZONE_CHANGE") { data in
             XCTAssertEqual(data["previous_seconds_from_gmt"] as? Int, 0)
             XCTAssertEqual(data["current_seconds_from_gmt"] as? Int, 7_200)
         }
     }
 
     func testTimezoneChangeNotificationBreadcrumb() {
-        let scope = Scope()
-        sut = fixture.getSut(scope: scope, currentDevice: nil)
+        sut = fixture.getSut(currentDevice: nil)
 
         fixture.currentDateProvider.timezoneOffsetValue = 7_200
 
         sut.timezoneEventTriggered()
 
-        assertBreadcrumbAction(scope: scope, action: "TIMEZONE_CHANGE") { data in
+        assertBreadcrumbAction(action: "TIMEZONE_CHANGE") { data in
             XCTAssertEqual(data["previous_seconds_from_gmt"] as? Int, 0)
             XCTAssertEqual(data["current_seconds_from_gmt"] as? Int, 7_200)
         }
     }
 
-    private func assertBreadcrumbAction(scope: Scope, action: String, checks: (([String: Any]) -> Void)? = nil) {
-        let ser = scope.serialize()
-        if let breadcrumbs = ser["breadcrumbs"] as? [[String: Any]] {
-            if let crumb = breadcrumbs.first {
-                XCTAssertEqual("device.event", crumb["category"] as? String)
-                XCTAssertEqual("system", crumb["type"] as? String)
-                XCTAssertEqual("info", crumb["level"] as? String)
-                
-                if let data = crumb["data"] as? [String: Any] {
-                    XCTAssertEqual(action, data["action"] as? String)
-                    checks?(data)
-                } else {
-                    XCTFail("no breadcrumb.data")
-                }
-            } else {
-                XCTFail("scope.breadcrumbs is empty")
-            }
-        } else {
-            XCTFail("no scope.breadcrumbs")
-        }
+    func testStopCallsSpecificRemoveObserverMethods() {
+        sut = fixture.getSut(currentDevice: nil)
+        sut.stop()
+        XCTAssertEqual(fixture.notificationCenterWrapper.removeObserverWithNameInvocations.count, 7)
+    }
+    
+    private func postBatteryLevelNotification(uiDevice: UIDevice) {
+        Dynamic(sut).batteryStateChanged(Notification(name: UIDevice.batteryLevelDidChangeNotification, object: uiDevice))
     }
 
-    private func assertNoBreadcrumbAction(scope: Scope, action: String) {
-        let ser = scope.serialize()
-        if let breadcrumbs = ser["breadcrumbs"] as? [[String: Any]] {
-            if let crumb = breadcrumbs.first, let data = crumb["data"] as? [String: Any], data["action"] as? String == action {
-                XCTFail("unwanted breadcrumb found")
+    private func assertBreadcrumbAction(action: String, checks: (([String: Any]) -> Void)? = nil) {
+        XCTAssertEqual(1, fixture.delegate.addCrumbInvocations.count)
+        
+        if let crumb = fixture.delegate.addCrumbInvocations.first {
+       
+            XCTAssertEqual("device.event", crumb.category)
+            XCTAssertEqual("system", crumb.type)
+            XCTAssertEqual(SentryLevel.info, crumb.level)
+            
+            if let data = crumb.data {
+                XCTAssertEqual(action, data["action"] as? String)
+                checks?(data)
+            } else {
+                XCTFail("no breadcrumb.data")
             }
         }
     }
     
     #endif
+}
+
+class SentrySystemEventBreadcrumbTestDelegate: NSObject, SentrySystemEventBreadcrumbsDelegate {
+    
+    var addCrumbInvocations = Invocations<Breadcrumb>()
+    func add(_ crumb: Breadcrumb) {
+        addCrumbInvocations.record(crumb)
+    }
 }

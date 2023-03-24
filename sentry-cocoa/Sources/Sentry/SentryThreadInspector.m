@@ -28,8 +28,9 @@ unsigned int
 getStackEntriesFromThread(SentryCrashThread thread, struct SentryCrashMachineContext *context,
     SentryCrashStackEntry *buffer, unsigned int maxEntries)
 {
-    sentrycrashmc_getContextForThread(thread, context, false);
+    sentrycrashmc_getContextForThread(thread, context, NO);
     SentryCrashStackCursor stackCursor;
+
     sentrycrashsc_initWithMachineContext(&stackCursor, MAX_STACKTRACE_LENGTH, context);
 
     unsigned int entries = 0;
@@ -58,6 +59,11 @@ getStackEntriesFromThread(SentryCrashThread thread, struct SentryCrashMachineCon
     return self;
 }
 
+- (SentryStacktrace *)stacktraceForCurrentThreadAsyncUnsafe
+{
+    return [self.stacktraceBuilder buildStacktraceForCurrentThreadAsyncUnsafe];
+}
+
 - (NSArray<SentryThread *> *)getCurrentThreads
 {
     NSMutableArray<SentryThread *> *threads = [NSMutableArray new];
@@ -72,6 +78,8 @@ getStackEntriesFromThread(SentryCrashThread thread, struct SentryCrashMachineCon
         SentryCrashThread thread = [self.machineContextWrapper getThread:context withIndex:i];
         SentryThread *sentryThread = [[SentryThread alloc] initWithThreadId:@(i)];
 
+        sentryThread.isMain =
+            [NSNumber numberWithBool:[self.machineContextWrapper isMainThread:thread]];
         sentryThread.name = [self getThreadName:thread];
 
         sentryThread.crashed = @NO;
@@ -111,9 +119,19 @@ getStackEntriesFromThread(SentryCrashThread thread, struct SentryCrashMachineCon
         thread_act_array_t suspendedThreads = NULL;
         mach_msg_type_number_t numSuspendedThreads = 0;
 
-        sentrycrashmc_suspendEnvironment(&suspendedThreads, &numSuspendedThreads);
+        // SentryThreadInspector is crashing when there is too many threads.
+        // We add a limit of 70 threads because in test with up to 100 threads it seems fine.
+        // We are giving it an extra safety margin.
+        sentrycrashmc_suspendEnvironment_upToMaxSupportedThreads(
+            &suspendedThreads, &numSuspendedThreads, 70);
         // DANGER: Do not try to allocate memory in the heap or call Objective-C code in this
         // section Doing so when the threads are suspended may lead to deadlocks or crashes.
+
+        // If no threads was suspended we don't need to do anything.
+        // This may happen if there is more than max amount of threads (70).
+        if (numSuspendedThreads == 0) {
+            return threads;
+        }
 
         SentryThreadInfo threadsInfos[numSuspendedThreads];
 
@@ -137,6 +155,7 @@ getStackEntriesFromThread(SentryCrashThread thread, struct SentryCrashMachineCon
         for (int i = 0; i < numSuspendedThreads; i++) {
             SentryThread *sentryThread = [[SentryThread alloc] initWithThreadId:@(i)];
 
+            sentryThread.isMain = [NSNumber numberWithBool:i == 0];
             sentryThread.name = [self getThreadName:threadsInfos[i].thread];
 
             sentryThread.crashed = @NO;

@@ -20,7 +20,7 @@
     return result;
 }
 
-- (void)saveScreenShots:(NSString *)path
+- (void)saveScreenShots:(NSString *)imagesDirectoryPath
 {
     // This function does not dispatch the screenshot to the main thread.
     // The caller should be aware of that.
@@ -31,7 +31,7 @@
         NSString *name = idx == 0
             ? @"screenshot.png"
             : [NSString stringWithFormat:@"screenshot-%li.png", (unsigned long)idx + 1];
-        NSString *fileName = [path stringByAppendingPathComponent:name];
+        NSString *fileName = [imagesDirectoryPath stringByAppendingPathComponent:name];
         [obj writeToFile:fileName atomically:YES];
     }];
 }
@@ -47,7 +47,12 @@
 
         if ([window drawViewHierarchyInRect:window.bounds afterScreenUpdates:false]) {
             UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
-            [result addObject:UIImagePNGRepresentation(img)];
+            if (img.size.width > 0 || img.size.height > 0) {
+                NSData *bytes = UIImagePNGRepresentation(img);
+                if (bytes && bytes.length > 0) {
+                    [result addObject:bytes];
+                }
+            }
         }
 
         UIGraphicsEndImageContext();
