@@ -267,6 +267,10 @@ if(LINUX OR ANDROID)
 
         SET(HTTP_TRANSPORT_IMPL net/http_transport_libcurl.cc)
     else()
+        find_package(OpenSSL)
+        if(OPENSSL_FOUND)
+            set(CRASHPAD_USE_BORINGSSL ON)
+        endif()
         SET(HTTP_TRANSPORT_IMPL net/http_transport_socket.cc)
     endif()
     
@@ -285,6 +289,8 @@ if(LINUX OR ANDROID)
         linux/exception_information.h
         linux/memory_map.cc
         linux/memory_map.h
+        linux/pac_helper.cc
+        linux/pac_helper.h
         linux/proc_stat_reader.cc
         linux/proc_stat_reader.h
         linux/proc_task_reader.cc
