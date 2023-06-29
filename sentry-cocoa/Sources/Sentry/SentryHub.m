@@ -11,16 +11,19 @@
 #import "SentryId.h"
 #import "SentryLog.h"
 #import "SentryNSTimerWrapper.h"
+#import "SentryPerformanceTracker.h"
 #import "SentryProfilesSampler.h"
 #import "SentrySDK+Private.h"
 #import "SentrySamplingContext.h"
 #import "SentryScope+Private.h"
 #import "SentrySerialization.h"
 #import "SentrySession+Private.h"
+#import "SentryTraceOrigins.h"
 #import "SentryTracer.h"
 #import "SentryTracesSampler.h"
 #import "SentryTransaction.h"
 #import "SentryTransactionContext+Private.h"
+#import "SentryUIViewControllerPerformanceTracker.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -108,7 +111,6 @@ SentryHub ()
         [scope applyToSession:_session];
 
         [self storeCurrentSession:_session];
-        // TODO: Capture outside the lock. Not the reference in the scope.
         [self captureSession:_session];
     }
     [lastSession endSessionExitedWithTimestamp:[self.currentDateProvider date]];
@@ -304,17 +306,8 @@ SentryHub ()
     return [self startTransactionWithContext:[[SentryTransactionContext alloc]
                                                  initWithName:name
                                                    nameSource:kSentryTransactionNameSourceCustom
-                                                    operation:operation]];
-}
-
-- (id<SentrySpan>)startTransactionWithName:(NSString *)name
-                                nameSource:(SentryTransactionNameSource)source
-                                 operation:(NSString *)operation
-{
-    return [self
-        startTransactionWithContext:[[SentryTransactionContext alloc] initWithName:name
-                                                                        nameSource:source
-                                                                         operation:operation]];
+                                                    operation:operation
+                                                       origin:SentryTraceOriginManual]];
 }
 
 - (id<SentrySpan>)startTransactionWithName:(NSString *)name
@@ -324,20 +317,9 @@ SentryHub ()
     return [self startTransactionWithContext:[[SentryTransactionContext alloc]
                                                  initWithName:name
                                                    nameSource:kSentryTransactionNameSourceCustom
-                                                    operation:operation]
+                                                    operation:operation
+                                                       origin:SentryTraceOriginManual]
                                  bindToScope:bindToScope];
-}
-
-- (id<SentrySpan>)startTransactionWithName:(NSString *)name
-                                nameSource:(SentryTransactionNameSource)source
-                                 operation:(NSString *)operation
-                               bindToScope:(BOOL)bindToScope
-{
-    return
-        [self startTransactionWithContext:[[SentryTransactionContext alloc] initWithName:name
-                                                                              nameSource:source
-                                                                               operation:operation]
-                              bindToScope:bindToScope];
 }
 
 - (id<SentrySpan>)startTransactionWithContext:(SentryTransactionContext *)transactionContext
@@ -367,9 +349,8 @@ SentryHub ()
 {
     return [self startTransactionWithContext:transactionContext
                                  bindToScope:bindToScope
-                             waitForChildren:NO
                        customSamplingContext:customSamplingContext
-                                timerWrapper:nil];
+                               configuration:[SentryTracerConfiguration defaultConfiguration]];
 }
 
 - (SentryTransactionContext *)transactionContext:(SentryTransactionContext *)context
@@ -379,6 +360,7 @@ SentryHub ()
     return [[SentryTransactionContext alloc] initWithName:context.name
                                                nameSource:context.nameSource
                                                 operation:context.operation
+                                                   origin:context.origin
                                                   traceId:context.traceId
                                                    spanId:context.spanId
                                              parentSpanId:context.parentSpanId
@@ -386,41 +368,10 @@ SentryHub ()
                                             parentSampled:context.parentSampled];
 }
 
-- (id<SentrySpan>)startTransactionWithContext:(SentryTransactionContext *)transactionContext
-                                  bindToScope:(BOOL)bindToScope
-                              waitForChildren:(BOOL)waitForChildren
-                        customSamplingContext:(NSDictionary<NSString *, id> *)customSamplingContext
-                                 timerWrapper:(nullable SentryNSTimerWrapper *)timerWrapper
-{
-    SentrySamplingContext *samplingContext =
-        [[SentrySamplingContext alloc] initWithTransactionContext:transactionContext
-                                            customSamplingContext:customSamplingContext];
-
-    SentryTracesSamplerDecision *samplerDecision = [_tracesSampler sample:samplingContext];
-    transactionContext = [self transactionContext:transactionContext
-                                      withSampled:samplerDecision.decision];
-    transactionContext.sampleRate = samplerDecision.sampleRate;
-
-    SentryProfilesSamplerDecision *profilesSamplerDecision =
-        [_profilesSampler sample:samplingContext tracesSamplerDecision:samplerDecision];
-
-    id<SentrySpan> tracer = [[SentryTracer alloc] initWithTransactionContext:transactionContext
-                                                                         hub:self
-                                                     profilesSamplerDecision:profilesSamplerDecision
-                                                             waitForChildren:waitForChildren
-                                                                timerWrapper:timerWrapper];
-
-    if (bindToScope)
-        self.scope.span = tracer;
-
-    return tracer;
-}
-
 - (SentryTracer *)startTransactionWithContext:(SentryTransactionContext *)transactionContext
                                   bindToScope:(BOOL)bindToScope
                         customSamplingContext:(NSDictionary<NSString *, id> *)customSamplingContext
-                                  idleTimeout:(NSTimeInterval)idleTimeout
-                         dispatchQueueWrapper:(SentryDispatchQueueWrapper *)dispatchQueueWrapper
+                                configuration:(SentryTracerConfiguration *)configuration
 {
     SentrySamplingContext *samplingContext =
         [[SentrySamplingContext alloc] initWithTransactionContext:transactionContext
@@ -434,11 +385,12 @@ SentryHub ()
     SentryProfilesSamplerDecision *profilesSamplerDecision =
         [_profilesSampler sample:samplingContext tracesSamplerDecision:samplerDecision];
 
+    configuration.profilesSamplerDecision = profilesSamplerDecision;
+
     SentryTracer *tracer = [[SentryTracer alloc] initWithTransactionContext:transactionContext
                                                                         hub:self
-                                                    profilesSamplerDecision:profilesSamplerDecision
-                                                                idleTimeout:idleTimeout
-                                                       dispatchQueueWrapper:dispatchQueueWrapper];
+                                                              configuration:configuration];
+
     if (bindToScope)
         self.scope.span = tracer;
 
@@ -669,6 +621,17 @@ SentryHub ()
     return NO;
 }
 
+- (void)reportFullyDisplayed
+{
+#if SENTRY_HAS_UIKIT
+    if (_client.options.enableTimeToFullDisplay) {
+        [SentryUIViewControllerPerformanceTracker.shared reportFullyDisplayed];
+    } else {
+        SENTRY_LOG_DEBUG(@"The options `enableTimeToFullDisplay` is disabled.");
+    }
+#endif
+}
+
 - (void)flush:(NSTimeInterval)timeout
 {
     SentryClient *client = _client;
@@ -680,6 +643,7 @@ SentryHub ()
 - (void)close
 {
     [_client close];
+    SENTRY_LOG_DEBUG(@"Closed the Hub.");
 }
 
 @end

@@ -175,7 +175,38 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
         XCTAssertEqual(session, fileManager.readCurrentSession())
         XCTAssertNil(fileManager.readCrashedSession())
     }
-    
+
+    func testBinaryImageCacheStartAndStop() {
+        let (sut, _) = givenSutWithGlobalHub()
+
+        sut.install(with: Options())
+
+        XCTAssertTrue(fixture.sentryCrash.binaryCacheStarted)
+
+        var imagesCounter = 0
+
+        sentrycrashbic_iterateOverImages({ _, context in
+            guard let counter = context?.assumingMemoryBound(to: Int.self) else {
+                return
+            }
+            counter.pointee += 1
+        }, &imagesCounter)
+        XCTAssertGreaterThan(imagesCounter, 0)
+
+        sut.uninstall()
+        imagesCounter = 0
+
+        sentrycrashbic_iterateOverImages({ _, context in
+            guard let counter = context?.assumingMemoryBound(to: Int.self) else {
+                return
+            }
+            counter.pointee += 1
+        }, &imagesCounter)
+
+        XCTAssertEqual(imagesCounter, 0)
+        XCTAssertTrue(fixture.sentryCrash.binaryCacheStopped)
+    }
+
     func testEndSessionAsCrashed_NoCurrentSession() {
         let (sut, _) = givenSutWithGlobalHub()
         
@@ -185,33 +216,7 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
         XCTAssertNil(fileManager.readCurrentSession())
         XCTAssertNil(fileManager.readCrashedSession())
     }
-    
-    func testInstall_WhenStitchAsyncCallsEnabled_CallsInstallAsyncHooks() {
-        let sut = fixture.getSut()
-        
-        let options = Options()
-        options.stitchAsyncCode = true
-        sut.install(with: options)
-        
-        XCTAssertTrue(fixture.sentryCrash.installAsyncHooksCalled)
-    }
-    
-    func testInstall_WhenStitchAsyncCallsDisabled_DoesNotCallInstallAsyncHooks() {
-        fixture.getSut().install(with: Options())
-        
-        XCTAssertFalse(fixture.sentryCrash.installAsyncHooksCalled)
-    }
-
-    func testUninstall_CallsUninstallAsyncHooks() {
-        let sut = fixture.getSut()
-
-        sut.install(with: Options())
-
-        sut.uninstall()
-
-        XCTAssertTrue(fixture.sentryCrash.uninstallAsyncHooksCalled)
-    }
-    
+            
     func testUninstall_DoesNotUpdateLocale_OnLocaleDidChangeNotification() {
         let (sut, hub) = givenSutWithGlobalHubAndCrashWrapper()
 
@@ -272,7 +277,7 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
         api?.pointee.setEnabled(true)
         
         let transport = TestTransport()
-        let client = SentryClient(options: fixture.options)
+        let client = SentryClient(options: fixture.options, fileManager: try TestFileManager(options: fixture.options), deleteOldEnvelopeItems: false)
         Dynamic(client).transportAdapter = TestTransportAdapter(transport: transport, options: fixture.options)
         hub.bindClient(client)
         

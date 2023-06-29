@@ -3,7 +3,47 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@interface
+SentryUser ()
+@property (atomic, strong) NSDictionary<NSString *, id> *_Nullable unknown;
+@end
+
 @implementation SentryUser
+
+- (instancetype)initWithDictionary:(NSDictionary *)dictionary
+{
+    if (self = [super init]) {
+        NSMutableDictionary *unknown = [NSMutableDictionary dictionary];
+        for (id key in dictionary) {
+            id value = [dictionary valueForKey:key];
+            if (value == nil) {
+                continue;
+            }
+            BOOL isString = [value isKindOfClass:[NSString class]];
+            BOOL isDictionary = [value isKindOfClass:[NSDictionary class]];
+
+            if ([key isEqualToString:@"id"] && isString) {
+                self.userId = value;
+            } else if ([key isEqualToString:@"email"] && isString) {
+                self.email = value;
+            } else if ([key isEqualToString:@"username"] && isString) {
+                self.username = value;
+            } else if ([key isEqualToString:@"ip_address"] && isString) {
+                self.ipAddress = value;
+            } else if ([key isEqualToString:@"segment"] && isString) {
+                self.segment = value;
+            } else if ([key isEqualToString:@"data"] && isDictionary) {
+                self.data = value;
+            } else {
+                unknown[key] = value;
+            }
+        }
+        if (unknown.count > 0) {
+            self.unknown = [unknown copy];
+        }
+    }
+    return self;
+}
 
 - (instancetype)initWithUserId:(NSString *)userId
 {
@@ -29,7 +69,10 @@ NS_ASSUME_NONNULL_BEGIN
         copy.username = self.username;
         copy.ipAddress = self.ipAddress;
         copy.segment = self.segment;
+        copy.name = self.name;
+        copy.geo = self.geo.copy;
         copy.data = self.data.copy;
+        copy.unknown = self.unknown.copy;
     }
 
     return copy;
@@ -44,8 +87,15 @@ NS_ASSUME_NONNULL_BEGIN
     [serializedData setValue:self.username forKey:@"username"];
     [serializedData setValue:self.ipAddress forKey:@"ip_address"];
     [serializedData setValue:self.segment forKey:@"segment"];
+    [serializedData setValue:self.name forKey:@"name"];
+    [serializedData setValue:[self.geo serialize] forKey:@"geo"];
     [serializedData setValue:[self.data sentry_sanitize] forKey:@"data"];
-
+    NSDictionary<NSString *, id> *unknown = self.unknown;
+    if (unknown != nil) {
+        for (id key in unknown) {
+            [serializedData setValue:unknown[key] forKey:key];
+        }
+    }
     return serializedData;
 }
 
@@ -96,8 +146,23 @@ NS_ASSUME_NONNULL_BEGIN
         return NO;
     }
 
+    NSString *otherName = user.name;
+    if (self.name != otherName && ![self.name isEqualToString:otherName]) {
+        return NO;
+    }
+
+    SentryGeo *otherGeo = user.geo;
+    if (self.geo != otherGeo && ![self.geo isEqualToGeo:otherGeo]) {
+        return NO;
+    }
+
     NSDictionary<NSString *, id> *otherUserData = user.data;
     if (self.data != otherUserData && ![self.data isEqualToDictionary:otherUserData]) {
+        return NO;
+    }
+
+    NSDictionary<NSString *, id> *otherUserUnknown = user.unknown;
+    if (self.unknown != otherUserUnknown && ![self.unknown isEqualToDictionary:otherUserUnknown]) {
         return NO;
     }
 
@@ -113,8 +178,10 @@ NS_ASSUME_NONNULL_BEGIN
     hash = hash * 23 + [self.username hash];
     hash = hash * 23 + [self.ipAddress hash];
     hash = hash * 23 + [self.segment hash];
+    hash = hash * 23 + [self.name hash];
+    hash = hash * 23 + [self.geo hash];
     hash = hash * 23 + [self.data hash];
-
+    hash = hash * 23 + [self.unknown hash];
     return hash;
 }
 

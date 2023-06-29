@@ -30,6 +30,8 @@ class SentryClientTest: XCTestCase {
         let transaction: Transaction
         let crashWrapper = TestSentryCrashWrapper.sharedInstance()
         let deviceWrapper = TestSentryUIDeviceWrapper()
+        let processWrapper = TestSentryNSProcessInfoWrapper()
+        let extraContentProvider: SentryExtraContextProvider
         let locale = Locale(identifier: "en_US")
         let timezone = TimeZone(identifier: "Europe/Vienna")!
         let queue = DispatchQueue(label: "SentryHubTests", qos: .utility, attributes: [.concurrent])
@@ -50,7 +52,7 @@ class SentryClientTest: XCTestCase {
             
             let options = Options()
             options.dsn = SentryClientTest.dsn
-            fileManager = try! SentryFileManager(options: options, andCurrentDateProvider: TestCurrentDateProvider())
+            fileManager = try! SentryFileManager(options: options, andCurrentDateProvider: TestCurrentDateProvider(), dispatchQueueWrapper: TestSentryDispatchQueueWrapper())
             
             transaction = Transaction(trace: trace, children: [])
             
@@ -60,6 +62,8 @@ class SentryClientTest: XCTestCase {
             crashWrapper.internalFreeMemorySize = 123_456
             crashWrapper.internalAppMemorySize = 234_567
             crashWrapper.internalFreeStorageSize = 345_678
+            
+            extraContentProvider = SentryExtraContextProvider(crashWrapper: crashWrapper, deviceWrapper: deviceWrapper, processInfoWrapper: processWrapper)
         }
 
         func getSut(configureOptions: (Options) -> Void = { _ in }) -> SentryClient {
@@ -77,10 +81,9 @@ class SentryClientTest: XCTestCase {
                     deleteOldEnvelopeItems: false,
                     threadInspector: threadInspector,
                     random: random,
-                    crashWrapper: crashWrapper,
-                    deviceWrapper: deviceWrapper,
                     locale: locale,
-                    timezone: timezone
+                    timezone: timezone,
+                    extraContextProvider: extraContentProvider
                 )
             } catch {
                 XCTFail("Options could not be created")
@@ -102,14 +105,12 @@ class SentryClientTest: XCTestCase {
         }
 
         var scope: Scope {
-            get {
-                let scope = Scope()
-                scope.setEnvironment(environment)
-                scope.setTag(value: "value", key: "key")
-                scope.addAttachment(TestData.dataAttachment)
-                scope.setContext(value: [SentryDeviceContextFreeMemoryKey: 2_000], key: "device")
-                return scope
-            }
+            let scope = Scope()
+            scope.setEnvironment(environment)
+            scope.setTag(value: "value", key: "key")
+            scope.addAttachment(TestData.dataAttachment)
+            scope.setContext(value: [SentryDeviceContextFreeMemoryKey: 2_000], key: "device")
+            return scope
         }
         
         var eventWithCrash: Event {
@@ -412,7 +413,7 @@ class SentryClientTest: XCTestCase {
         eventId.assertIsNotEmpty()
         let error = TestError.invalidTest as NSError
         assertLastSentEvent { actual in
-            assertValidErrorEvent(actual, error)
+            assertValidErrorEvent(actual, error, exceptionValue: "invalidTest (Code: 0)")
         }
     }
 
@@ -448,6 +449,62 @@ class SentryClientTest: XCTestCase {
             do {
                 let exceptions = try XCTUnwrap(actual.exceptions)
                 XCTAssertEqual("Code: 999", try XCTUnwrap(exceptions.first).value)
+            } catch {
+                XCTFail("Exception expected but was nil")
+            }
+        }
+    }
+    
+    func testCaptureSwiftError_UsesSwiftStringDescription() {
+        let eventId = fixture.getSut().capture(error: SentryClientError.someError)
+
+        eventId.assertIsNotEmpty()
+        assertLastSentEvent { actual in
+            do {
+                let exceptions = try XCTUnwrap(actual.exceptions)
+                XCTAssertEqual("someError (Code: 1)", try XCTUnwrap(exceptions.first).value)
+            } catch {
+                XCTFail("Exception expected but was nil")
+            }
+        }
+    }
+    
+    func testCaptureSwiftErrorStruct_UsesSwiftStringDescription() {
+        let eventId = fixture.getSut().capture(error: XMLParsingError(line: 10, column: 12, kind: .internalError))
+
+        eventId.assertIsNotEmpty()
+        assertLastSentEvent { actual in
+            do {
+                let exceptions = try XCTUnwrap(actual.exceptions)
+                XCTAssertEqual("XMLParsingError(line: 10, column: 12, kind: SentryTests.XMLParsingError.ErrorKind.internalError) (Code: 1)", try XCTUnwrap(exceptions.first).value)
+            } catch {
+                XCTFail("Exception expected but was nil")
+            }
+        }
+    }
+    
+    func testCaptureSwiftErrorWithData_UsesSwiftStringDescription() {
+        let eventId = fixture.getSut().capture(error: SentryClientError.invalidInput("hello"))
+
+        eventId.assertIsNotEmpty()
+        assertLastSentEvent { actual in
+            do {
+                let exceptions = try XCTUnwrap(actual.exceptions)
+                XCTAssertEqual("invalidInput(\"hello\") (Code: 0)", try XCTUnwrap(exceptions.first).value)
+            } catch {
+                XCTFail("Exception expected but was nil")
+            }
+        }
+    }
+    
+    func testCaptureSwiftErrorWithDebugDescription_UsesDebugDescription() {
+        let eventId = fixture.getSut().capture(error: SentryClientErrorWithDebugDescription.someError)
+
+        eventId.assertIsNotEmpty()
+        assertLastSentEvent { actual in
+            do {
+                let exceptions = try XCTUnwrap(actual.exceptions)
+                XCTAssertEqual("anotherError (Code: 0)", try XCTUnwrap(exceptions.first).value)
             } catch {
                 XCTFail("Exception expected but was nil")
             }
@@ -610,9 +667,7 @@ class SentryClientTest: XCTestCase {
     func testCaptureEvent_AddCurrentMemoryStorageAndCPUCoreCount() {
 
         let sut = fixture.getSut()
-        let testProcessWrapper = TestSentryNSProcessInfoWrapper()
-        testProcessWrapper.overrides.processorCount = 12
-        Dynamic(sut).processInfoWrapper = testProcessWrapper
+        fixture.processWrapper.overrides.processorCount = 12
 
         sut.capture(event: TestData.event)
 
@@ -627,7 +682,7 @@ class SentryClientTest: XCTestCase {
             XCTAssertEqual(eventFreeStorage, 345_678)
 
             let cpuCoreCount = actual.context?["device"]?["processor_count"] as? UInt
-            XCTAssertEqual(testProcessWrapper.processorCount, cpuCoreCount)
+            XCTAssertEqual(fixture.processWrapper.processorCount, cpuCoreCount)
         }
     }
     
@@ -1132,12 +1187,6 @@ class SentryClientTest: XCTestCase {
         }
     }
 
-    func testTrackStitchAsyncCode() {        
-        testFeatureTrackingAsIntegration(integrationName: "StitchAsyncCode") {
-            $0.stitchAsyncCode = true
-        }
-    }
-
 #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     func testTrackPreWarmedAppStartTracking() {
         testFeatureTrackingAsIntegration(integrationName: "PreWarmedAppStartTracing") {
@@ -1463,7 +1512,7 @@ class SentryClientTest: XCTestCase {
         }
     }
     
-    private func assertValidErrorEvent(_ event: Event, _ error: NSError) {
+    private func assertValidErrorEvent(_ event: Event, _ error: NSError, exceptionValue: String? = nil) {
         XCTAssertEqual(SentryLevel.error, event.level)
         XCTAssertEqual(error, event.error as NSError?)
         
@@ -1474,7 +1523,7 @@ class SentryClientTest: XCTestCase {
         let exception = exceptions[0]
         XCTAssertEqual(error.domain, exception.type)
         
-        XCTAssertEqual("Code: \(error.code)", exception.value)
+        XCTAssertEqual(exceptionValue ?? "Code: \(error.code)", exception.value)
         
         XCTAssertNil(exception.threadId)
         XCTAssertNil(exception.stacktrace)
@@ -1514,7 +1563,7 @@ class SentryClientTest: XCTestCase {
     }
     
     private func assertValidDebugMeta(actual: [DebugMeta]?, forThreads threads: [SentryThread]?) {
-        let debugMetas = fixture.debugImageBuilder.getDebugImages(for: threads ?? [])
+        let debugMetas = fixture.debugImageBuilder.getDebugImages(for: threads ?? [], isCrash: false)
         
         XCTAssertEqual(debugMetas, actual ?? [])
     }
@@ -1562,6 +1611,28 @@ class SentryClientTest: XCTestCase {
         }
     }
     
+}
+
+enum SentryClientError: Error {
+    case someError
+    case invalidInput(String)
+}
+
+enum SentryClientErrorWithDebugDescription: Error {
+    case someError
+}
+
+extension SentryClientErrorWithDebugDescription: CustomNSError {
+    var errorUserInfo: [String: Any] {
+        func getDebugDescription() -> String {
+            switch self {
+            case .someError:
+                return  "anotherError"
+            }
+        }
+
+        return [NSDebugDescriptionErrorKey: getDebugDescription()]
+    }
 }
 
 // swiftlint:enable file_length

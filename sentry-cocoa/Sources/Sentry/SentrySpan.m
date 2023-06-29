@@ -7,6 +7,7 @@
 #import "SentryLog.h"
 #import "SentryMeasurementValue.h"
 #import "SentryNoOpSpan.h"
+#import "SentrySampleDecision+Private.h"
 #import "SentrySerializable.h"
 #import "SentrySpanContext.h"
 #import "SentrySpanId.h"
@@ -41,6 +42,7 @@ SentrySpan ()
         _spanDescription = context.spanDescription;
         _spanId = context.spanId;
         _sampled = context.sampled;
+        _origin = context.origin;
     }
     return self;
 }
@@ -146,7 +148,7 @@ SentrySpan ()
     if (self.timestamp == nil) {
         self.timestamp = [SentryCurrentDate date];
         SENTRY_LOG_DEBUG(@"Setting span timestamp: %@ at system time %llu", self.timestamp,
-            (unsigned long long)getAbsoluteTime());
+            (unsigned long long)SentryCurrentDate.systemTime);
     }
     if (self.tracer == nil) {
         SENTRY_LOG_DEBUG(
@@ -169,7 +171,8 @@ SentrySpan ()
         @"type" : SENTRY_TRACE_TYPE,
         @"span_id" : self.spanId.sentrySpanIdString,
         @"trace_id" : self.traceId.sentryIdString,
-        @"op" : self.operation
+        @"op" : self.operation,
+        @"origin" : self.origin
     }
                                                  .mutableCopy;
 
@@ -182,7 +185,7 @@ SentrySpan ()
     // Since we guard for 'undecided', we'll
     // either send it if it's 'true' or 'false'.
     if (self.sampled != kSentrySampleDecisionUndecided) {
-        [mutableDictionary setValue:nameForSentrySampleDecision(self.sampled) forKey:@"sampled"];
+        [mutableDictionary setValue:valueForSentrySampleDecision(self.sampled) forKey:@"sampled"];
     }
 
     if (self.spanDescription != nil) {

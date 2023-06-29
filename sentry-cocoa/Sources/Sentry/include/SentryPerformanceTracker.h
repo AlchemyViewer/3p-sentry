@@ -21,10 +21,14 @@ NS_ASSUME_NONNULL_BEGIN
  * Starts a new span if no span is active, then bind it to the scope if no span is bound.
  * @note If there's an active span, starts a child of the active span.
  * @param name Span name.
+ * @param source the transaction name source.
  * @param operation Span operation.
  * @return The span id.
  */
-- (SentrySpanId *)startSpanWithName:(NSString *)name operation:(NSString *)operation;
+- (SentrySpanId *)startSpanWithName:(NSString *)name
+                         nameSource:(SentryTransactionNameSource)source
+                          operation:(NSString *)operation
+                             origin:(NSString *)origin;
 
 /**
  * Activate the span with @c spanId to create any call to @c startSpan as a child.
@@ -37,23 +41,29 @@ NS_ASSUME_NONNULL_BEGIN
 /**
  * Measure the given @c block execution.
  * @param description The description of the span.
+ * @param source the transaction name source.
  * @param operation Span operation.
  * @param block Block to be measured.
  */
 - (void)measureSpanWithDescription:(NSString *)description
+                        nameSource:(SentryTransactionNameSource)source
                          operation:(NSString *)operation
+                            origin:(NSString *)origin
                            inBlock:(void (^)(void))block;
 
 /**
  * Measure the given @c block execution adding it as a child of given parent span.
  * @note If @c parentSpanId does not exist this measurement is not performed.
  * @param description The description of the span.
+ * @param source the transaction name source.
  * @param operation Span operation.
  * @param parentSpanId Id of the span to use as parent.
  * @param block Block to be measured.
  */
 - (void)measureSpanWithDescription:(NSString *)description
+                        nameSource:(SentryTransactionNameSource)source
                          operation:(NSString *)operation
+                            origin:(NSString *)origin
                       parentSpanId:(SentrySpanId *)parentSpanId
                            inBlock:(void (^)(void))block;
 

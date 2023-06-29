@@ -6,6 +6,7 @@ class SentryTransactionTests: XCTestCase {
     private class Fixture {
         let transactionName = "Some Transaction"
         let transactionOperation = "ui.load"
+        let traceOrigin = "auto"
         let testKey = "extra_key"
         let testValue = "extra_value"
         
@@ -14,7 +15,7 @@ class SentryTransactionTests: XCTestCase {
         }
         
         func getContext() -> TransactionContext {
-            return TransactionContext(name: transactionName, nameSource: .component, operation: transactionOperation)
+            return TransactionContext(name: transactionName, nameSource: .component, operation: transactionOperation, origin: traceOrigin)
         }
         
         func getTrace() -> SentryTracer {
@@ -160,6 +161,17 @@ class SentryTransactionTests: XCTestCase {
         // then
         XCTAssertEqual(serializedTransactionExtra, [fixture.testKey: fixture.testValue])
     }
+    
+    func testSerializeOrigin() throws {
+        let scope = Scope()
+        let transaction = fixture.getTransactionWith(scope: scope)
+        let actual = transaction.serialize()
+        
+        let contexts = try XCTUnwrap(actual["contexts"] as? [String: Any])
+        let traceContext = try XCTUnwrap(contexts["trace"] as? [String: Any])
+        
+        XCTAssertEqual(fixture.traceOrigin, traceContext["origin"] as? String)
+    }
 
     func testSerialize_TransactionInfo() {
         let scope = Scope()
@@ -168,5 +180,14 @@ class SentryTransactionTests: XCTestCase {
 
         let actualTransactionInfo = actual["transaction_info"] as? [String: String]
         XCTAssertEqual(actualTransactionInfo?["source"], "component")
+    }
+    
+    func testSerialize_TransactionName() {
+        let scope = Scope()
+        let transaction = fixture.getTransactionWith(scope: scope)
+        let actual = transaction.serialize()
+
+        let actualTransaction = actual["transaction"] as? String
+        XCTAssertEqual(actualTransaction, fixture.transactionName)
     }
 }

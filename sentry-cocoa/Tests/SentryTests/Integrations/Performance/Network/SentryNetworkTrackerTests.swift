@@ -8,6 +8,7 @@ class SentryNetworkTrackerTests: XCTestCase {
     private static let testURL = URL(string: "https://www.domain.com/api")!
     private static let transactionName = "TestTransaction"
     private static let transactionOperation = "Test"
+    private static let origin = "auto.http.ns_url_session"
     
     private class Fixture {
         static let url = ""
@@ -155,7 +156,7 @@ class SentryNetworkTrackerTests: XCTestCase {
         let tracer = SentryTracer(transactionContext: TransactionContext(name: SentryNetworkTrackerTests.transactionName,
                                                                          operation: SentryNetworkTrackerTests.transactionOperation),
                                   hub: nil,
-                                  waitForChildren: true)
+                                  configuration: SentryTracerConfiguration(block: { $0.waitForChildren = true }))
 
         tracer.finish()
 
@@ -172,8 +173,7 @@ class SentryNetworkTrackerTests: XCTestCase {
         let task = createDataTask()
         let tracer = SentryTracer(transactionContext: TransactionContext(name: SentryNetworkTrackerTests.transactionName,
                                                                          operation: SentryNetworkTrackerTests.transactionOperation),
-                                  hub: nil,
-                                  waitForChildren: true)
+                                  hub: nil, configuration: SentryTracerConfiguration(block: { $0.waitForChildren = true }))
         fixture.scope.span = tracer
         
         sut.urlSessionTaskResume(task)
@@ -215,6 +215,7 @@ class SentryNetworkTrackerTests: XCTestCase {
         let span = spanForTask(task: task)!
         
         XCTAssertEqual(span.spanDescription, "GET \(SentryNetworkTrackerTests.testURL)")
+        XCTAssertEqual(SentryNetworkTrackerTests.origin, span.origin)
     }
     
     func testSpanDescriptionNameWithPost() {
@@ -222,6 +223,7 @@ class SentryNetworkTrackerTests: XCTestCase {
         let span = spanForTask(task: task)!
         
         XCTAssertEqual(span.spanDescription, "POST \(SentryNetworkTrackerTests.testURL)")
+        XCTAssertEqual(SentryNetworkTrackerTests.origin, span.origin)
     }
     
     func testStatusForTaskRunning() {
@@ -367,6 +369,22 @@ class SentryNetworkTrackerTests: XCTestCase {
         XCTAssertEqual(breadcrumbs!.count, 1)
         XCTAssertEqual(breadcrumb!.data!["url"] as! String, SentryNetworkTrackerTests.testURL.absoluteString)
         XCTAssertEqual(breadcrumb!.data!["method"] as! String, "GET")
+    }
+
+    func testNoDuplicatedBreadcrumbs() {
+        let task = createDataTask()
+        let _ = spanForTask(task: task)!
+
+        objc_removeAssociatedObjects(task)
+
+        setTaskState(task, state: .completed)
+        setTaskState(task, state: .running)
+        setTaskState(task, state: .completed)
+
+        let breadcrumbs = Dynamic(fixture.scope).breadcrumbArray as [Breadcrumb]?
+        let amount = breadcrumbs?.count ?? 0
+
+        XCTAssertEqual(amount, 1)
     }
     
     func testWhenNoSpan_RemoveObserver() {
@@ -626,8 +644,6 @@ class SentryNetworkTrackerTests: XCTestCase {
         
         sut.urlSessionTask(task, setState: .completed)
         
-        fixture.hub.group.wait()
-        
         guard let envelope = self.fixture.hub.capturedEventsWithScopes.first else {
             XCTFail("Expected to capture 1 event")
             return
@@ -657,8 +673,6 @@ class SentryNetworkTrackerTests: XCTestCase {
         
         sut.urlSessionTask(task, setState: .completed)
         
-        fixture.hub.group.wait()
-        
         guard let envelope = self.fixture.hub.capturedEventsWithScopes.first else {
             XCTFail("Expected to capture 1 event")
             return
@@ -677,8 +691,6 @@ class SentryNetworkTrackerTests: XCTestCase {
         task.setResponse(createResponse(code: 500))
         
         sut.urlSessionTask(task, setState: .completed)
-        
-        fixture.hub.group.wait()
         
         guard let envelope = self.fixture.hub.capturedEventsWithScopes.first else {
             XCTFail("Expected to capture 1 event")

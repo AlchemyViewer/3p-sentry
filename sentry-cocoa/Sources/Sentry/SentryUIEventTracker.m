@@ -7,6 +7,7 @@
 #import <SentrySpanId.h>
 #import <SentrySpanOperations.h>
 #import <SentrySpanProtocol.h>
+#import <SentryTraceOrigins.h>
 #import <SentryTracer.h>
 #import <SentryTransactionContext+Private.h>
 #import <SentryUIEventTracker.h>
@@ -110,7 +111,8 @@ SentryUIEventTracker ()
             SentryTransactionContext *context =
                 [[SentryTransactionContext alloc] initWithName:transactionName
                                                     nameSource:kSentryTransactionNameSourceComponent
-                                                     operation:operation];
+                                                     operation:operation
+                                                        origin:SentryTraceOriginUIEventTracker];
 
             __block SentryTracer *transaction;
             [SentrySDK.currentHub.scope useSpan:^(id<SentrySpan> _Nullable span) {
@@ -121,12 +123,17 @@ SentryUIEventTracker ()
                     && ![span.operation containsString:SentrySpanOperationUIAction];
 
                 BOOL bindToScope = !ongoingScreenLoadTransaction && !ongoingManualTransaction;
-                transaction =
-                    [SentrySDK.currentHub startTransactionWithContext:context
-                                                          bindToScope:bindToScope
-                                                customSamplingContext:@{}
-                                                          idleTimeout:self.idleTimeout
-                                                 dispatchQueueWrapper:self.dispatchQueueWrapper];
+
+                transaction = [SentrySDK.currentHub
+                    startTransactionWithContext:context
+                                    bindToScope:bindToScope
+                          customSamplingContext:@{}
+                                  configuration:[SentryTracerConfiguration configurationWithBlock:^(
+                                                    SentryTracerConfiguration *config) {
+                                      config.idleTimeout = self.idleTimeout;
+                                      config.waitForChildren = YES;
+                                      config.dispatchQueueWrapper = self.dispatchQueueWrapper;
+                                  }]];
 
                 SENTRY_LOG_DEBUG(@"SentryUIEventTracker automatically started a new transaction "
                                  @"with name: %@, bindToScope: %@",
