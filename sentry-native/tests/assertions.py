@@ -7,7 +7,7 @@ import sys
 
 from .conditions import is_android
 
-VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)(?:[-\.]?)(.*)")
+VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)[-.]?(.*)")
 
 
 def matches(actual, expected):
@@ -55,9 +55,9 @@ def assert_meta(
     }
     expected_sdk = {
         "name": "sentry.native",
-        "version": "0.6.0",
+        "version": "0.6.4",
         "packages": [
-            {"name": "github:getsentry/sentry-native", "version": "0.6.0"},
+            {"name": "github:getsentry/sentry-native", "version": "0.6.4"},
         ],
     }
     if is_android:
@@ -95,7 +95,7 @@ def assert_meta(
             )
             assert event["contexts"]["os"]["build"] is not None
 
-    if sdk_override != None:
+    if sdk_override is not None:
         expected_sdk["name"] = sdk_override
 
     assert_matches(event, expected)

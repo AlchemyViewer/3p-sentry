@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.6.4
+
+**Fixes**:
+
+- Crash events are initialized with level `FATAL` ([#852](https://github.com/getsentry/sentry-native/pull/852))
+- Fix MSVC compiler error with on non-Unicode systems ([#846](https://github.com/getsentry/sentry-native/pull/846), [crashpad#85](https://github.com/getsentry/crashpad/pull/85))
+
+**Features**:
+
+- crashpad_handler: log `body` if minidump endpoint response is not `OK` ([#851](https://github.com/getsentry/sentry-native/pull/851), [crashpad#87](https://github.com/getsentry/crashpad/pull/87))
+
+**Thank you**:
+
+Features, fixes and improvements in this release have been contributed by:
+
+- [@xyz1001](https://github.com/xyz1001)
+
+## 0.6.3
+
+**Features**:
+
+- Disable PC adjustment in the backend for libunwindstack ([#839](https://github.com/getsentry/sentry-native/pull/839))
+- Crashpad backend allows inspection and enrichment of the crash event in the on_crash/before_send hooks ([#843](https://github.com/getsentry/sentry-native/pull/843))
+- Add http-proxy support to the `crashpad_handler` ([#847](https://github.com/getsentry/sentry-native/pull/847), [crashpad#86](https://github.com/getsentry/crashpad/pull/86))
+
+**Internal**:
+
+- Updated Breakpad backend to 2023-05-03. ([#836](https://github.com/getsentry/sentry-native/pull/836), [breakpad#35](https://github.com/getsentry/breakpad/pull/35))
+- Updated Crashpad backend to 2023-05-03. ([#837](https://github.com/getsentry/sentry-native/pull/837), [crashpad#82](https://github.com/getsentry/crashpad/pull/82))
+
+## 0.6.2
+
+**Features**:
+
+- Extend API with ptr/len-string interfaces. ([#827](https://github.com/getsentry/sentry-native/pull/827))
+- Allow setting sdk_name at runtime ([#834](https://github.com/getsentry/sentry-native/pull/834))
+
+## 0.6.1
+
+**Fixes**:
+
+- Remove OpenSSL as direct dependency for the crashpad backend on Linux. ([#812](https://github.com/getsentry/sentry-native/pull/812), [crashpad#81](https://github.com/getsentry/crashpad/pull/81))
+- Check `libcurl` for feature `AsynchDNS` at compile- and runtime. ([#813](https://github.com/getsentry/sentry-native/pull/813))
+- Allow setting `CRASHPAD_WER_ENABLED` when using system crashpad. ([#816](https://github.com/getsentry/sentry-native/pull/816))
+
+**Docs**:
+
+- Add badges for conan, nix and vcpkg package-repos to README. ([#795](https://github.com/getsentry/sentry-native/pull/795))
+
+**Thank you**:
+
+Features, fixes and improvements in this release have been contributed by:
+
+- [@Cyriuz](https://github.com/Cyriuz)
+- [@MartinDelille](https://github.com/MartinDelille)
+
 ## 0.6.0
 
 **Breaking changes**:

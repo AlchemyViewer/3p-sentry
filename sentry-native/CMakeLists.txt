@@ -65,6 +65,9 @@ endif()
 
 if(MSVC)
 	option(SENTRY_BUILD_RUNTIMESTATIC "Build sentry-native with static runtime" OFF)
+
+	set(CMAKE_C_FLAGS    "${CMAKE_C_FLAGS} /utf-8")
+	set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} /utf-8")
 endif()
 
 if(LINUX)
@@ -274,7 +277,7 @@ endif()
 
 if(SENTRY_TRANSPORT_CURL)
 #	if(NOT CURL_FOUND) # Some other lib might bring libcurl already
-#		find_package(CURL REQUIRED)
+#		find_package(CURL REQUIRED COMPONENTS AsynchDNS)
 #	endif()
 
 #	if(TARGET CURL::libcurl) # Only available in cmake 3.12+
@@ -435,8 +438,9 @@ if(SENTRY_BACKEND_CRASHPAD)
 			set(CRASHPAD_ENABLE_INSTALL ON CACHE BOOL "Enable crashpad installation" FORCE)
 		endif()
 		add_subdirectory(external/crashpad crashpad_build)
+
 		if(CRASHPAD_WER_ENABLED)
-			add_compile_definitions(CRASHPAD_WER_ENABLED)
+			add_dependencies(sentry crashpad::wer)
 		endif()
 
 		# set static runtime if enabled
@@ -491,8 +495,9 @@ if(SENTRY_BACKEND_CRASHPAD)
 		endif()
 	endif()
 	add_dependencies(sentry crashpad::handler)
+
 	if(CRASHPAD_WER_ENABLED)
-		add_dependencies(sentry crashpad::wer)
+		add_compile_definitions(CRASHPAD_WER_ENABLED)
 	endif()
 elseif(SENTRY_BACKEND_BREAKPAD)
 	option(SENTRY_BREAKPAD_SYSTEM "Use system breakpad" OFF)
