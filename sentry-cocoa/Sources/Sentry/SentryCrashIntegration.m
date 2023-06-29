@@ -84,10 +84,6 @@ SentryCrashIntegration ()
 
     [self startCrashHandler];
 
-    if (options.stitchAsyncCode) {
-        [self.crashAdapter installAsyncHooks];
-    }
-
     [self configureScope];
 
     return YES;
@@ -144,6 +140,7 @@ SentryCrashIntegration ()
             [SentryCrashIntegration sendAllSentryCrashReports];
         }
     };
+    [self.crashAdapter startBinaryImageCache];
     [self.dispatchQueueWrapper dispatchOnce:&installationToken block:block];
 }
 
@@ -162,7 +159,7 @@ SentryCrashIntegration ()
         installationToken = 0;
     }
 
-    [self.crashAdapter uninstallAsyncHooks];
+    [self.crashAdapter stopBinaryImageCache];
 
     [NSNotificationCenter.defaultCenter removeObserver:self
                                                   name:NSCurrentLocaleDidChangeNotification

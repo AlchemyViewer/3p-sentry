@@ -1,5 +1,131 @@
 # Changelog
 
+## 8.8.0
+
+### Features
+
+- Experimental support for Swift Async stacktraces (#3051)
+- Cache binary images to be used for crashes (#2939)
+
+### Fixes
+
+- Fix a data race for `SentryId.empty` (#3072)
+- Duplicated HTTP breadcrumbs (#3058)
+- Expose SentryPrivate and SentrySwiftUI schemes for cartahge clients that have `--no-use-binaries` option (#3071)
+- Convert last remaining `sprintf` call to `snprintf` (#3077)
+- Fix a crash when serializing profiling data (#3092)
+
+## 8.7.4
+
+### Fixes
+
+- Changed `Trace` serialized value of `sampled` from string to boolean (#3067)
+
+### Breaking Changes
+
+- Removed `nameForSentrySampleDecision` which shouldn't have been public (#3067)
+
+## 8.7.3
+
+### Fixes
+
+- Convert one of the two remaining usages of `sprintf` to `snprintf` (#2866)
+- Fix use-after-free ASAN warning (#3042)
+- Fix memory leaks in the profiler (#3055, #3061)
+
+## 8.7.2
+
+### Fixed
+
+- Fix crashes in profiling serialization race condition (#3018, #3035)
+- Fix a crash for user interaction transactions (#3036)
+
+## 8.7.1
+
+### Fixes
+
+- Add `sent_at` to envelope header (#2859)
+- Fix import of `User` & `Breadcrumb` (#3017)
+
+## 8.7.0
+
+### Features
+
+- Allow starting the SDK with an initial scope (#2982)
+- Swift Error Names (#2960)
+
+```Swift
+enum LoginError: Error {
+    case wrongUser(id: String)
+    case wrongPassword
+}
+
+SentrySDK.capture(error: LoginError.wrongUser("12345678"))
+```
+
+For the Swift error above Sentry displays:
+
+| sentry-cocoa SDK | Title | Description |
+| ----------- | ----------- | ----------- |
+| Since 8.7.0 | `LoginError` | `wrongUser(id: "12345678") (Code: 1)` |
+| Before 8.7.0 | `LoginError` | `Code: 1` |
+
+[Customized error descriptions](https://docs.sentry.io/platforms/apple/usage/#customizing-error-descriptions) have precedence over this feature.
+This change has no impact on grouping of the issues in Sentry.
+
+### Fixes 
+
+- Propagate span when copying scope (#2952)
+- Remove "/" from crash report file name (#3005)
+
+## 8.6.0
+
+### Features
+
+- Send trace origin (#2957)
+
+[Trace origin](https://develop.sentry.dev/sdk/performance/trace-origin/) indicates what created a trace or a span. Not all transactions and spans contain enough information to tell whether the user or what precisely in the SDK created it. Origin solves this problem. The SDK now sends origin for transactions and spans.
+
+- Create User and Breadcrumb from map (#2820)
+
+### Fixes 
+
+- Improved performance serializing profiling data (#2863)
+- Possible crash in Core Data tracking (#2865)
+- Ensure the current GPU frame rate is always reported for concurrent transaction profiling metrics (#2929)
+- Move profiler metric collection to a background queue (#2956)
+
+### Removed
+
+- Remove experimental `stitchAsyncCode` from SentryOptions (#2973)
+
+The `stitchAsyncCode` experimental option has been removed from `SentryOptions` as its behavior was unpredictable and sometimes resulted in unexpected errors. We plan to add it back once we fix it, but we don't have an ETA for it.
+
+## 8.5.0
+
+### Features
+
+- feat: Core data operation in the main thread (#2879)
+
+### Fixes
+
+- Crash when serializing invalid objects (#2858)
+- Don't send screenshots with either width or height of 0 (#2876)
+- GPU frame alignment with stack traces in profiles (#2856)
+
+## 8.4.0
+
+### Features
+
+- Time to initial and full display (#2724)
+- Add time-to-initial-display and time-to-full-display measurements to ViewController transactions (#2843)
+- Add `name` and `geo` to User (#2710)
+
+### Fixes
+ 
+- Correctly track and send GPU frame render data in profiles (#2823)
+- Xcode 14.3 compiling issue regarding functions declaration with no prototype (#2852) 
+
 ## 8.3.3
 
 ### Fixes
@@ -14,7 +140,6 @@
 - Add CPU core count in device context (#2814)
 
 ### Fixes
-
 
 - Updating AppHang state on main thread (#2793)
 - App Hang report crashes with too many threads (#2811)

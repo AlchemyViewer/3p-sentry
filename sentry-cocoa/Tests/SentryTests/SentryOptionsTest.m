@@ -325,6 +325,11 @@
     [self testBooleanField:@"enableCaptureFailedRequests" defaultValue:YES];
 }
 
+- (void)testEnableTimeToFullDisplay
+{
+    [self testBooleanField:@"enableTimeToFullDisplay" defaultValue:NO];
+}
+
 - (void)testFailedRequestStatusCodes
 {
     SentryHttpStatusCodeRange *httpStatusCodeRange =
@@ -473,11 +478,6 @@
     [self testBooleanField:@"attachStacktrace"];
 }
 
-- (void)testStitchAsyncCodeDisabledPerDefault
-{
-    [self testBooleanField:@"stitchAsyncCode" defaultValue:NO];
-}
-
 - (void)testEnableIOTracking
 {
     [self testBooleanField:@"enableFileIOTracing" defaultValue:YES];
@@ -512,7 +512,6 @@
         @"enableOutOfMemoryTracking" : [NSNull null],
         @"sessionTrackingIntervalMillis" : [NSNull null],
         @"attachStacktrace" : [NSNull null],
-        @"stitchAsyncCode" : [NSNull null],
         @"maxAttachmentSize" : [NSNull null],
         @"sendDefaultPii" : [NSNull null],
         @"enableAutoPerformanceTracing" : [NSNull null],
@@ -534,7 +533,9 @@
         @"sdk" : [NSNull null],
         @"enableCaptureFailedRequests" : [NSNull null],
         @"failedRequestStatusCodes" : [NSNull null],
-        @"enableTracing" : [NSNull null]
+        @"enableTimeToFullDisplay" : [NSNull null],
+        @"enableTracing" : [NSNull null],
+        @"swiftAsyncStacktraces" : [NSNull null]
     }
                                                 didFailWithError:nil];
 
@@ -563,7 +564,6 @@
     XCTAssertEqual(YES, options.enableWatchdogTerminationTracking);
     XCTAssertEqual([@30000 unsignedIntValue], options.sessionTrackingIntervalMillis);
     XCTAssertEqual(YES, options.attachStacktrace);
-    XCTAssertEqual(NO, options.stitchAsyncCode);
     XCTAssertEqual(20 * 1024 * 1024, options.maxAttachmentSize);
     XCTAssertEqual(NO, options.sendDefaultPii);
     XCTAssertTrue(options.enableAutoPerformanceTracing);
@@ -587,6 +587,7 @@
     XCTAssertEqual(YES, options.enableSwizzling);
     XCTAssertEqual(YES, options.enableFileIOTracing);
     XCTAssertEqual(YES, options.enableAutoBreadcrumbTracking);
+    XCTAssertFalse(options.swiftAsyncStacktraces);
 
 #if SENTRY_HAS_METRIC_KIT
     if (@available(iOS 15.0, macOS 12.0, macCatalyst 15.0, *)) {
@@ -605,6 +606,8 @@
     SentryHttpStatusCodeRange *range = options.failedRequestStatusCodes[0];
     XCTAssertEqual(500, range.min);
     XCTAssertEqual(599, range.max);
+
+    XCTAssertFalse(options.enableTimeToFullDisplay);
 
 #if SENTRY_TARGET_PROFILING_SUPPORTED
 #    pragma clang diagnostic push
@@ -1143,6 +1146,23 @@
     XCTAssertEqualObjects(@[], options.inAppExcludes);
 }
 
+- (void)testDefaultInitialScope
+{
+    SentryOptions *options = [self getValidOptions:@{}];
+    SentryScope *scope = [[SentryScope alloc] init];
+    XCTAssertIdentical(scope, options.initialScope(scope));
+}
+
+- (void)testInitialScope
+{
+    SentryScope * (^initialScope)(SentryScope *) = ^SentryScope *(SentryScope *scope)
+    {
+        return scope;
+    };
+    SentryOptions *options = [self getValidOptions:@{ @"initialScope" : initialScope }];
+    XCTAssertIdentical(initialScope, options.initialScope);
+}
+
 - (SentryOptions *)getValidOptions:(NSDictionary<NSString *, id> *)dict
 {
     NSError *error = nil;
@@ -1165,6 +1185,24 @@
     SentryOptions *options = [self getValidOptions:@{ @"urlSessionDelegate" : urlSessionDelegate }];
 
     XCTAssertNotNil(options.urlSessionDelegate);
+}
+
+- (void)testDefaultSwiftAsyncStacktraces
+{
+    SentryOptions *options = [[SentryOptions alloc] init];
+    XCTAssertFalse(options.swiftAsyncStacktraces);
+}
+
+- (void)testInitialSwiftAsyncStacktraces
+{
+    SentryOptions *options = [self getValidOptions:@{}];
+    XCTAssertFalse(options.swiftAsyncStacktraces);
+}
+
+- (void)testInitialSwiftAsyncStacktracesYes
+{
+    SentryOptions *options = [self getValidOptions:@{ @"swiftAsyncStacktraces" : @YES }];
+    XCTAssertTrue(options.swiftAsyncStacktraces);
 }
 
 - (void)assertArrayEquals:(NSArray<NSString *> *)expected actual:(NSArray<NSString *> *)actual

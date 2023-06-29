@@ -21,8 +21,6 @@ typedef NS_ENUM(NSUInteger, SentryProfilerTruncationReason) {
 NS_ASSUME_NONNULL_BEGIN
 
 SENTRY_EXTERN const int kSentryProfilerFrequencyHz;
-SENTRY_EXTERN NSString *const kTestStringConst;
-FOUNDATION_EXPORT NSTimeInterval kSentryProfilerTimeoutInterval;
 
 SENTRY_EXTERN NSString *const kSentryProfilerSerializationKeySlowFrameRenders;
 SENTRY_EXTERN NSString *const kSentryProfilerSerializationKeyFrozenFrameRenders;

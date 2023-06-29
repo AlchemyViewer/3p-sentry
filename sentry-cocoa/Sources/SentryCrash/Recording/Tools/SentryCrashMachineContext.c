@@ -1,3 +1,4 @@
+// Adapted from: https://github.com/kstenerud/KSCrash
 //
 //  SentryCrashMachineContext.c
 //
@@ -53,7 +54,6 @@ isStackOverflow(const SentryCrashMachineContext *const context)
         &stackCursor, SentryCrashSC_STACK_OVERFLOW_THRESHOLD, context);
     while (stackCursor.advanceCursor(&stackCursor)) { }
     bool rv = stackCursor.state.hasGivenUp;
-    sentrycrash_async_backtrace_decref(stackCursor.async_caller);
     return rv;
 }
 
@@ -92,7 +92,7 @@ getThreadList(SentryCrashMachineContext *context)
 }
 
 int
-sentrycrashmc_contextSize()
+sentrycrashmc_contextSize(void)
 {
     return sizeof(SentryCrashMachineContext);
 }

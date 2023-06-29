@@ -62,6 +62,9 @@
                   Identifier = "SentryCrashReportStore_Tests/testCrashReportCount1">
                </Test>
                <Test
+                  Identifier = "SentryCrashReportStore_Tests/testDeleteAllReports">
+               </Test>
+               <Test
                   Identifier = "SentryNSErrorTests/testSerializeWithUnderlyingNSException()">
                </Test>
                <Test
@@ -75,9 +78,6 @@
                </Test>
                <Test
                   Identifier = "SentrySessionGeneratorTests/testSendSessions()">
-               </Test>
-               <Test
-                  Identifier = "SentryStacktraceBuilderTests/testAsyncStacktraces()">
                </Test>
                <Test
                   Identifier = "SentrySubClassFinderTests/testActOnSubclassesOfViewController()">

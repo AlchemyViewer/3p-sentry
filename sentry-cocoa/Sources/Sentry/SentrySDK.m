@@ -139,9 +139,11 @@ static NSUInteger startInvocations;
     [newClient.fileManager moveAppStateToPreviousAppState];
     [newClient.fileManager moveBreadcrumbsToPreviousBreadcrumbs];
 
+    SentryScope *scope
+        = options.initialScope([[SentryScope alloc] initWithMaxBreadcrumbs:options.maxBreadcrumbs]);
     // The Hub needs to be initialized with a client so that closing a session
     // can happen.
-    [SentrySDK setCurrentHub:[[SentryHub alloc] initWithClient:newClient andScope:nil]];
+    [SentrySDK setCurrentHub:[[SentryHub alloc] initWithClient:newClient andScope:scope]];
     SENTRY_LOG_DEBUG(@"SDK initialized! Version: %@", SentryMeta.versionString);
     [SentrySDK installIntegrations];
 }
@@ -182,37 +184,14 @@ static NSUInteger startInvocations;
 
 + (id<SentrySpan>)startTransactionWithName:(NSString *)name operation:(NSString *)operation
 {
-    return [self startTransactionWithName:name
-                               nameSource:kSentryTransactionNameSourceCustom
-                                operation:operation];
-}
-
-+ (id<SentrySpan>)startTransactionWithName:(NSString *)name
-                                nameSource:(SentryTransactionNameSource)source
-                                 operation:(NSString *)operation
-{
-    return [SentrySDK.currentHub startTransactionWithName:name
-                                               nameSource:source
-                                                operation:operation];
+    return [SentrySDK.currentHub startTransactionWithName:name operation:operation];
 }
 
 + (id<SentrySpan>)startTransactionWithName:(NSString *)name
                                  operation:(NSString *)operation
                                bindToScope:(BOOL)bindToScope
 {
-    return [self startTransactionWithName:name
-                               nameSource:kSentryTransactionNameSourceCustom
-                                operation:operation
-                              bindToScope:bindToScope];
-}
-
-+ (id<SentrySpan>)startTransactionWithName:(NSString *)name
-                                nameSource:(SentryTransactionNameSource)source
-                                 operation:(NSString *)operation
-                               bindToScope:(BOOL)bindToScope
-{
     return [SentrySDK.currentHub startTransactionWithName:name
-                                               nameSource:source
                                                 operation:operation
                                               bindToScope:bindToScope];
 }
@@ -383,6 +362,11 @@ static NSUInteger startInvocations;
     }
 }
 
++ (void)reportFullyDisplayed
+{
+    [SentrySDK.currentHub reportFullyDisplayed];
+}
+
 + (void)flush:(NSTimeInterval)timeout
 {
     [SentrySDK.currentHub flush:timeout];
@@ -393,16 +377,18 @@ static NSUInteger startInvocations;
  */
 + (void)close
 {
+    SENTRY_LOG_DEBUG(@"Starting to close SDK.");
     // pop the hub and unset
     SentryHub *hub = SentrySDK.currentHub;
 
-    // uninstall all the integrations
+    // Uninstall all the integrations
     for (NSObject<SentryIntegrationProtocol> *integration in hub.installedIntegrations) {
         if ([integration respondsToSelector:@selector(uninstall)]) {
             [integration uninstall];
         }
     }
     [hub removeAllIntegrations];
+    SENTRY_LOG_DEBUG(@"Uninstalled all integrations.");
 
 #if SENTRY_HAS_UIKIT
     // force the AppStateManager to unsubscribe, see
