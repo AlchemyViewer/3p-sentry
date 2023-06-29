@@ -67,7 +67,7 @@ case "$AUTOBUILD_PLATFORM" in
             export SDKROOT=$(xcodebuild -version -sdk ${SDKNAME} Path)
             export MACOSX_DEPLOYMENT_TARGET=10.15
 
-            carthage build --archive --platform macOS --verbose
+            carthage build --use-xcframeworks --no-skip-current --verbose
 
             mkdir -p "$stage/lib/release"
 
