@@ -28,7 +28,7 @@ source_environment_tempfile="$stage/source_environment.sh"
 "$autobuild" source_environment > "$source_environment_tempfile"
 . "$source_environment_tempfile"
 
-version="8.3.3-0.6.0"
+version="8.8.0-0.6.4"
 echo "${version}" > "${stage}/VERSION.txt"
 
 case "$AUTOBUILD_PLATFORM" in
@@ -62,12 +62,11 @@ case "$AUTOBUILD_PLATFORM" in
     # ------------------------- darwin, darwin64 -------------------------
     darwin*)
         pushd "$COCOA_SOURCE_DIR"
-            carthage build --use-xcframeworks --no-skip-current --verbose
+            carthage build --use-xcframeworks --no-skip-current --platform macOS --verbose
 
             mkdir -p "$stage/lib/release"
 
-            pushd "Carthage/Build/Mac/Sentry.framework"
-
+            pushd "Carthage/Build/Sentry.xcframework/macos-arm64_x86_64/Sentry.framework"
                 mkdir -p "$stage/include/sentry"
                 mv Headers/* $stage/include/sentry/
                 rm -r Headers PrivateHeaders Modules
@@ -75,12 +74,14 @@ case "$AUTOBUILD_PLATFORM" in
                     rm -r Headers PrivateHeaders Modules
                 popd
             popd
-            cp -a Carthage/Build/Mac/* $stage/lib/release/
+            cp -a Carthage/Build/* $stage/lib/release/
 
             if [ -n "${APPLE_SIGNATURE:=""}" -a -n "${APPLE_KEY:=""}" -a -n "${APPLE_KEYCHAIN:=""}" ]; then
                 KEYCHAIN_PATH="$HOME/Library/Keychains/$APPLE_KEYCHAIN"
                 security unlock-keychain -p $APPLE_KEY $KEYCHAIN_PATH
-                codesign --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNATURE" --force --timestamp "$stage/lib/release/Sentry.framework" || true
+                codesign --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNATURE" --force --timestamp "$stage/lib/release/Sentry.xcframework" || true
+                codesign --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNATURE" --force --timestamp "$stage/lib/release/SentryPrivate.xcframework" || true
+                codesign --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNATURE" --force --timestamp "$stage/lib/release/SentrySwiftUI.xcframework" || true
                 security lock-keychain $KEYCHAIN_PATH
             else
                 echo "Code signing not configured; skipping codesign."
