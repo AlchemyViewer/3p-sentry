@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.5
+
+**Fixes**:
+
+- Remove deadlock pattern in dynamic sdk-name assignment ([#858](https://github.com/getsentry/sentry-native/pull/858))
+
 ## 0.6.4
 
 **Fixes**:
