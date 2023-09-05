@@ -1,18 +1,20 @@
-#import "SentrySwizzleWrapper.h"
-#import <SentryHub+Private.h>
-#import <SentryLog.h>
-#import <SentrySDK+Private.h>
-#import <SentrySDK.h>
-#import <SentryScope.h>
-#import <SentrySpanId.h>
-#import <SentrySpanOperations.h>
-#import <SentrySpanProtocol.h>
-#import <SentryTraceOrigins.h>
-#import <SentryTracer.h>
-#import <SentryTransactionContext+Private.h>
 #import <SentryUIEventTracker.h>
 
 #if SENTRY_HAS_UIKIT
+
+#    import "SentrySwizzleWrapper.h"
+#    import <SentryDependencyContainer.h>
+#    import <SentryHub+Private.h>
+#    import <SentryLog.h>
+#    import <SentrySDK+Private.h>
+#    import <SentrySDK.h>
+#    import <SentryScope.h>
+#    import <SentrySpanId.h>
+#    import <SentrySpanOperations.h>
+#    import <SentrySpanProtocol.h>
+#    import <SentryTraceOrigins.h>
+#    import <SentryTracer.h>
+#    import <SentryTransactionContext+Private.h>
 #    import <UIKit/UIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -23,25 +25,18 @@ static NSString *const SentryUIEventTrackerSwizzleSendAction
 @interface
 SentryUIEventTracker ()
 
-@property (nonatomic, strong) SentrySwizzleWrapper *swizzleWrapper;
 @property (nonatomic, strong) SentryDispatchQueueWrapper *dispatchQueueWrapper;
 @property (nonatomic, assign) NSTimeInterval idleTimeout;
 @property (nullable, nonatomic, strong) NSMutableArray<SentryTracer *> *activeTransactions;
 
 @end
 
-#endif
-
 @implementation SentryUIEventTracker
 
-#if SENTRY_HAS_UIKIT
-
-- (instancetype)initWithSwizzleWrapper:(SentrySwizzleWrapper *)swizzleWrapper
-                  dispatchQueueWrapper:(SentryDispatchQueueWrapper *)dispatchQueueWrapper
-                           idleTimeout:(NSTimeInterval)idleTimeout
+- (instancetype)initWithDispatchQueueWrapper:(SentryDispatchQueueWrapper *)dispatchQueueWrapper
+                                 idleTimeout:(NSTimeInterval)idleTimeout
 {
     if (self = [super init]) {
-        self.swizzleWrapper = swizzleWrapper;
         self.dispatchQueueWrapper = dispatchQueueWrapper;
         self.idleTimeout = idleTimeout;
         self.activeTransactions = [NSMutableArray new];
@@ -51,7 +46,7 @@ SentryUIEventTracker ()
 
 - (void)start
 {
-    [self.swizzleWrapper
+    [SentryDependencyContainer.sharedInstance.swizzleWrapper
         swizzleSendAction:^(NSString *action, id target, id sender, UIEvent *event) {
             if (target == nil) {
                 SENTRY_LOG_DEBUG(@"Target was nil for action %@; won't capture in transaction "
@@ -168,7 +163,8 @@ SentryUIEventTracker ()
 
 - (void)stop
 {
-    [self.swizzleWrapper removeSwizzleSendActionForKey:SentryUIEventTrackerSwizzleSendAction];
+    [SentryDependencyContainer.sharedInstance.swizzleWrapper
+        removeSwizzleSendActionForKey:SentryUIEventTrackerSwizzleSendAction];
 }
 
 - (NSString *)getOperation:(id)sender
@@ -208,12 +204,6 @@ SentryUIEventTracker ()
     return [NSString stringWithFormat:@"%@.%@", target, components.firstObject];
 }
 
-NS_ASSUME_NONNULL_END
-
-#endif
-
-NS_ASSUME_NONNULL_BEGIN
-
 + (BOOL)isUIEventOperation:(NSString *)operation
 {
     if ([operation isEqualToString:SentrySpanOperationUIAction]) {
@@ -228,3 +218,5 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 NS_ASSUME_NONNULL_END
+
+#endif // SENTRY_HAS_UIKIT

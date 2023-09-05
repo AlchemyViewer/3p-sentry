@@ -325,9 +325,9 @@
     [self testBooleanField:@"enableCaptureFailedRequests" defaultValue:YES];
 }
 
-- (void)testEnableTimeToFullDisplay
+- (void)testEnableTimeToFullDisplayTracing
 {
-    [self testBooleanField:@"enableTimeToFullDisplay" defaultValue:NO];
+    [self testBooleanField:@"enableTimeToFullDisplayTracing" defaultValue:NO];
 }
 
 - (void)testFailedRequestStatusCodes
@@ -392,6 +392,12 @@
 
     XCTAssertTrue([[SentryOptions defaultIntegrations] isEqualToArray:options.integrations],
         @"Default integrations are not set correctly");
+}
+
+- (void)testSentryCrashIntegrationIsFirst
+{
+    XCTAssertEqualObjects(SentryOptions.defaultIntegrations.firstObject,
+        NSStringFromClass([SentryCrashIntegration class]));
 }
 
 - (void)testSampleRateWithDict
@@ -533,7 +539,7 @@
         @"sdk" : [NSNull null],
         @"enableCaptureFailedRequests" : [NSNull null],
         @"failedRequestStatusCodes" : [NSNull null],
-        @"enableTimeToFullDisplay" : [NSNull null],
+        @"enableTimeToFullDisplayTracing" : [NSNull null],
         @"enableTracing" : [NSNull null],
         @"swiftAsyncStacktraces" : [NSNull null]
     }
@@ -607,7 +613,7 @@
     XCTAssertEqual(500, range.min);
     XCTAssertEqual(599, range.max);
 
-    XCTAssertFalse(options.enableTimeToFullDisplay);
+    XCTAssertFalse(options.enableTimeToFullDisplayTracing);
 
 #if SENTRY_TARGET_PROFILING_SUPPORTED
 #    pragma clang diagnostic push
@@ -720,16 +726,6 @@
     [self testBooleanField:@"enableFileIOTracing" defaultValue:YES];
 }
 
-#    if SENTRY_HAS_METRIC_KIT
-
-- (void)testEnableMetricKit
-{
-    if (@available(iOS 14.0, macOS 12.0, macCatalyst 14.0, *)) {
-        [self testBooleanField:@"enableMetricKit" defaultValue:NO];
-    }
-}
-#    endif
-
 - (void)testShutdownTimeInterval
 {
     NSNumber *shutdownTimeInterval = @2.1;
@@ -752,6 +748,16 @@
     [self testBooleanField:@"enablePreWarmedAppStartTracing" defaultValue:NO];
 }
 
+#endif
+
+#if SENTRY_HAS_METRIC_KIT
+
+- (void)testEnableMetricKit
+{
+    if (@available(iOS 14.0, macOS 12.0, macCatalyst 14.0, *)) {
+        [self testBooleanField:@"enableMetricKit" defaultValue:NO];
+    }
+}
 #endif
 
 - (void)testEnableAppHangTracking

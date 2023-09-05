@@ -1,8 +1,9 @@
+#if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+
 import Sentry
 import SentryTestUtils
 import XCTest
 
-#if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
 class SentryViewHierarchyIntegrationTests: XCTestCase {
 
     private class Fixture {
@@ -88,7 +89,8 @@ class SentryViewHierarchyIntegrationTests: XCTestCase {
 
         XCTAssertEqual(newAttachmentList?.count, 0)
     }
-    
+
+#if os(iOS) || targetEnvironment(macCatalyst)
     func test_noViewHierarchy_MetricKitEvent() {
         let sut = fixture.getSut()
         
@@ -96,6 +98,7 @@ class SentryViewHierarchyIntegrationTests: XCTestCase {
 
         XCTAssertEqual(newAttachmentList?.count, 0)
     }
+#endif // os(iOS) || targetEnvironment(macCatalyst)
 
     func test_noViewHierarchy_keepAttachment() {
         let sut = fixture.getSut()
@@ -109,4 +112,5 @@ class SentryViewHierarchyIntegrationTests: XCTestCase {
         XCTAssertEqual(newAttachmentList?.first, attachment)
     }
 }
-#endif
+
+#endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)

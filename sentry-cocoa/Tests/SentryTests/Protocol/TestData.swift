@@ -257,6 +257,8 @@ class TestData {
         event.exceptions = [exception]
         return event
     }
+
+#if os(iOS) || os(macOS) || targetEnvironment(macCatalyst)
     
     static var metricKitEvent: Event {
         let event = Event(level: .warning)
@@ -265,6 +267,8 @@ class TestData {
         event.exceptions = [exception]
         return event
     }
+
+#endif // os(iOS) || os(macOS) || targetEnvironment(macCatalyst)
     
     static func scopeWith(observer: SentryScopeObserver) -> Scope {
         let scope = Scope()
@@ -317,7 +321,9 @@ class TestData {
         
         return request
     }
-    
+
+    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+
     static func getAppStartMeasurement(type: SentryAppStartType, appStartTimestamp: Date = TestData.timestamp) -> SentryAppStartMeasurement {
         let appStartDuration = 0.5
         let main = appStartTimestamp.addingTimeInterval(0.15)
@@ -327,4 +333,5 @@ class TestData {
         return SentryAppStartMeasurement(type: type, isPreWarmed: false, appStartTimestamp: appStartTimestamp, duration: appStartDuration, runtimeInitTimestamp: runtimeInit, moduleInitializationTimestamp: main, didFinishLaunchingTimestamp: didFinishLaunching)
     }
 
+    #endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
 }

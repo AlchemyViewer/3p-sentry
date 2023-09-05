@@ -4,18 +4,17 @@
 
 #if SENTRY_TARGET_PROFILING_SUPPORTED
 
-@class SentryNSProcessInfoWrapper;
-@class SentryDispatchFactory;
-@class SentrySystemWrapper;
 @class SentryTransaction;
 
 NS_ASSUME_NONNULL_BEGIN
 
 SENTRY_EXTERN NSString *const kSentryMetricProfilerSerializationKeyMemoryFootprint;
-SENTRY_EXTERN NSString *const kSentryMetricProfilerSerializationKeyCPUUsageFormat;
+SENTRY_EXTERN NSString *const kSentryMetricProfilerSerializationKeyCPUUsage;
+SENTRY_EXTERN NSString *const kSentryMetricProfilerSerializationKeyCPUEnergyUsage;
 
 SENTRY_EXTERN NSString *const kSentryMetricProfilerSerializationUnitBytes;
 SENTRY_EXTERN NSString *const kSentryMetricProfilerSerializationUnitPercentage;
+SENTRY_EXTERN NSString *const kSentryMetricProfilerSerializationUnitNanoJoules;
 
 // The next two types are technically the same as far as the type system is concerned, but they
 // actually contain different mixes of value types, so define them separately. If they ever change,
@@ -42,9 +41,6 @@ typedef NSDictionary<NSString *, id /* <NSString, NSArray<SentrySerializedMetric
  */
 @interface SentryMetricProfiler : NSObject
 
-- (instancetype)initWithProcessInfoWrapper:(SentryNSProcessInfoWrapper *)processInfoWrapper
-                             systemWrapper:(SentrySystemWrapper *)systemWrapper
-                           dispatchFactory:(SentryDispatchFactory *)dispatchFactory;
 - (void)start;
 - (void)stop;
 
@@ -64,8 +60,9 @@ typedef NSDictionary<NSString *, id /* <NSString, NSArray<SentrySerializedMetric
  * }
  * @endcode
  */
-- (NSMutableDictionary<NSString *, SentrySerializedMetricEntry *> *)serializeForTransaction:
-    (SentryTransaction *)transaction;
+- (NSMutableDictionary<NSString *, SentrySerializedMetricEntry *> *)
+    serializeBetween:(uint64_t)startSystemTime
+                 and:(uint64_t)endSystemTime;
 
 @end
 

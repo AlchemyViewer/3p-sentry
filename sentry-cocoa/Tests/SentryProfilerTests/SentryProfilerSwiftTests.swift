@@ -28,8 +28,9 @@ class SentryProfilerSwiftTests: XCTestCase {
         lazy var systemWrapper = TestSentrySystemWrapper()
         lazy var processInfoWrapper = TestSentryNSProcessInfoWrapper()
         lazy var dispatchFactory = TestDispatchFactory()
-        var metricTimerWrapper: TestDispatchSourceWrapper?
-        lazy var timeoutTimerWrapper = TestSentryNSTimerWrapper()
+        var metricTimerFactory: TestDispatchSourceWrapper?
+        lazy var timeoutTimerFactory = TestSentryNSTimerFactory()
+        let dispatchQueueWrapper = TestSentryDispatchQueueWrapper()
 
         let currentDateProvider = TestCurrentDateProvider()
 
@@ -39,42 +40,57 @@ class SentryProfilerSwiftTests: XCTestCase {
 #endif
 
         init() {
-            CurrentDate.setCurrentDateProvider(currentDateProvider)
+            SentryDependencyContainer.sharedInstance().dateProvider = currentDateProvider
             options.profilesSampleRate = 1.0
             options.tracesSampleRate = 1.0
 
-            SentryProfiler.useSystemWrapper(systemWrapper)
-            SentryProfiler.useProcessInfoWrapper(processInfoWrapper)
+            SentryDependencyContainer.sharedInstance().systemWrapper = systemWrapper
+            SentryDependencyContainer.sharedInstance().processInfoWrapper = processInfoWrapper
             dispatchFactory.vendedSourceHandler = { eventHandler in
-                self.metricTimerWrapper = eventHandler
+                self.metricTimerFactory = eventHandler
             }
-            SentryProfiler.useDispatchFactory(dispatchFactory)
-            SentryProfiler.useTimeoutTimerWrapper(timeoutTimerWrapper)
+            SentryDependencyContainer.sharedInstance().dispatchFactory = dispatchFactory
+            SentryDependencyContainer.sharedInstance().timerFactory = timeoutTimerFactory
 
-            systemWrapper.overrides.cpuUsagePerCore = mockCPUUsages.map { NSNumber(value: $0) }
-            processInfoWrapper.overrides.processorCount = UInt(mockCPUUsages.count)
+            systemWrapper.overrides.cpuUsage = NSNumber(value: mockCPUUsage)
             systemWrapper.overrides.memoryFootprintBytes = mockMemoryFootprint
+            systemWrapper.overrides.cpuEnergyUsage = 0
 
 #if !os(macOS)
-            SentryProfiler.useFramesTracker(framesTracker)
+            SentryDependencyContainer.sharedInstance().framesTracker = framesTracker
             framesTracker.start()
             displayLinkWrapper.call()
 #endif
         }
 
         /// Advance the mock date provider, start a new transaction and return its handle.
-        func newTransaction(testingAppLaunchSpans: Bool = false) throws -> SentryTracer {
-            if testingAppLaunchSpans {
-                return try XCTUnwrap(hub.startTransaction(name: transactionName, operation: SentrySpanOperationUILoad) as? SentryTracer)
+        func newTransaction(testingAppLaunchSpans: Bool = false, automaticTransaction: Bool = false, idleTimeout: TimeInterval? = nil) throws -> SentryTracer {
+            let operation = testingAppLaunchSpans ? SentrySpanOperationUILoad : transactionOperation
+
+            if automaticTransaction {
+                return hub.startTransaction(
+                    with: TransactionContext(name: transactionName, operation: operation),
+                    bindToScope: false,
+                    customSamplingContext: [:],
+                    configuration: SentryTracerConfiguration(block: {
+                        if let idleTimeout = idleTimeout {
+                            $0.idleTimeout = idleTimeout
+                        }
+                        $0.dispatchQueueWrapper = self.dispatchQueueWrapper
+                        $0.waitForChildren = true
+                        $0.timerFactory = self.timeoutTimerFactory
+                    }))
             }
-            return try XCTUnwrap(hub.startTransaction(name: transactionName, operation: transactionOperation) as? SentryTracer)
+
+            return try XCTUnwrap(hub.startTransaction(name: transactionName, operation: operation) as? SentryTracer)
         }
 
         // mocking
 
-        let mockCPUUsages = [12.4, 63.5, 1.4, 4.6]
+        let mockCPUUsage = 66.6
         let mockMemoryFootprint: SentryRAMBytes = 123_455
-        let mockUsageReadingsPerBatch = 2
+        let mockEnergyUsage: NSNumber = 5
+        let mockUsageReadingsPerBatch = 3
 
 #if !os(macOS)
         // SentryFramesTracker starts assuming a frame rate of 60 Hz and will only log an update if it changes, so the first value here needs to be different for it to register.
@@ -98,10 +114,14 @@ class SentryProfilerSwiftTests: XCTestCase {
             // clear out any errors that might've been set in previous calls
             systemWrapper.overrides.cpuUsageError = nil
             systemWrapper.overrides.memoryFootprintError = nil
+            systemWrapper.overrides.cpuEnergyUsageError = nil
 
-            // gather mock cpu usages and memory footprints
+            // gather mocked metrics readings
             for _ in 0..<mockUsageReadingsPerBatch {
-                self.metricTimerWrapper?.fire()
+                self.metricTimerFactory?.fire()
+
+                // because energy readings are computed as the difference between sequential cumulative readings, we must increment the mock value by the expected result each iteration
+                systemWrapper.overrides.cpuEnergyUsage = NSNumber(value: systemWrapper.overrides.cpuEnergyUsage!.intValue + mockEnergyUsage.intValue)
             }
 
     #if !os(macOS)
@@ -183,7 +203,8 @@ class SentryProfilerSwiftTests: XCTestCase {
             // mock errors gathering cpu usage and memory footprint and fire a callback for them to ensure they don't add more information to the payload
             systemWrapper.overrides.cpuUsageError = NSError(domain: "test-error", code: 0)
             systemWrapper.overrides.memoryFootprintError = NSError(domain: "test-error", code: 1)
-            metricTimerWrapper?.fire()
+            systemWrapper.overrides.cpuEnergyUsageError = NSError(domain: "test-error", code: 2)
+            metricTimerFactory?.fire()
         }
 
         // app start simulation
@@ -192,6 +213,7 @@ class SentryProfilerSwiftTests: XCTestCase {
         var appStartDuration = 0.5
         lazy var appStartEnd = appStart.addingTimeInterval(appStartDuration)
 
+        #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         func getAppStartMeasurement(type: SentryAppStartType, preWarmed: Bool = false) -> SentryAppStartMeasurement {
             let runtimeInitDuration = 0.05
             let runtimeInit = appStart.addingTimeInterval(runtimeInitDuration)
@@ -203,6 +225,7 @@ class SentryProfilerSwiftTests: XCTestCase {
             appStartEnd = appStart.addingTimeInterval(appStartDuration)
             return SentryAppStartMeasurement(type: type, isPreWarmed: preWarmed, appStartTimestamp: appStart, duration: appStartDuration, runtimeInitTimestamp: runtimeInit, moduleInitializationTimestamp: main, didFinishLaunchingTimestamp: didFinishLaunching)
         }
+        #endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     }
 
     private var fixture: Fixture!
@@ -221,14 +244,14 @@ class SentryProfilerSwiftTests: XCTestCase {
         super.tearDown()
 
         // If a test early exits because of a thrown error, it may not finish the spans it created. This ensures the profiler stops before starting the next test case.
-        fixture.timeoutTimerWrapper.fire()
+        fixture.timeoutTimerFactory.fire()
 
         clearTestState()
     }
 
     func testMetricProfiler() throws {
         let span = try fixture.newTransaction()
-        forceProfilerSample()
+        addMockSamples()
         try fixture.gatherMockedMetrics(span: span)
         self.fixture.currentDateProvider.advanceBy(nanoseconds: 1.toNanoSeconds())
         span.finish()
@@ -240,21 +263,31 @@ class SentryProfilerSwiftTests: XCTestCase {
         var spans = [Span]()
 
         func createConcurrentSpansWithMetrics() throws {
-            for _ in 0 ..< numberOfTransactions {
+            XCTAssertFalse(SentryProfiler.isCurrentlyProfiling())
+            XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+
+            for i in 0 ..< numberOfTransactions {
                 let span = try fixture.newTransaction()
+                XCTAssertTrue(SentryProfiler.isCurrentlyProfiling())
+                XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(i + 1))
                 spans.append(span)
                 fixture.currentDateProvider.advanceBy(nanoseconds: 100)
             }
 
-            forceProfilerSample()
+            addMockSamples()
 
             for (i, span) in spans.enumerated() {
                 try fixture.gatherMockedMetrics(span: span)
+                XCTAssertTrue(SentryProfiler.isCurrentlyProfiling())
                 span.finish()
+                XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(numberOfTransactions - i - 1))
 
                 try self.assertValidProfileData()
                 try self.assertMetricsPayload(metricsBatches: i + 1)
             }
+            
+            XCTAssertFalse(SentryProfiler.isCurrentlyProfiling())
+            XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
         }
 
         try createConcurrentSpansWithMetrics()
@@ -278,23 +311,35 @@ class SentryProfilerSwiftTests: XCTestCase {
     ///    profiler B                                              |-------|  <- normal finish
     ///   ```
     func testConcurrentSpansWithTimeout() throws {
+        // start span A and mock profile data for it
         let spanA = try fixture.newTransaction()
         fixture.currentDateProvider.advanceBy(nanoseconds: 1.toNanoSeconds())
-        forceProfilerSample()
+        let expectedAddressesA: [NSNumber] = [0x1, 0x2, 0x3]
+        let expectedThreadMetadataA = ThreadMetadata(id: 1, priority: 2, name: "test-thread1")
+        let expectedQueueMetadataA = QueueMetadata(address: 3, label: "test-queue1")
+        addMockSamples(threadMetadata: expectedThreadMetadataA, queueMetadata: expectedQueueMetadataA, addresses: expectedAddressesA)
+
+        // time out profiler for span A
         fixture.currentDateProvider.advanceBy(nanoseconds: 30.toNanoSeconds())
-        fixture.timeoutTimerWrapper.fire()
+        fixture.timeoutTimerFactory.fire()
 
         fixture.currentDateProvider.advanceBy(nanoseconds: 0.5.toNanoSeconds())
 
+        // start span B and mock profile data for it
         let spanB = try fixture.newTransaction()
         fixture.currentDateProvider.advanceBy(nanoseconds: 0.5.toNanoSeconds())
-        forceProfilerSample()
+        let expectedAddressesB: [NSNumber] = [0x7, 0x8, 0x9]
+        let expectedThreadMetadataB = ThreadMetadata(id: 4, priority: 5, name: "test-thread2")
+        let expectedQueueMetadataB = QueueMetadata(address: 6, label: "test-queue2")
+        addMockSamples(threadMetadata: expectedThreadMetadataB, queueMetadata: expectedQueueMetadataB, addresses: expectedAddressesB)
 
+        // finish span B and check profile data
         spanB.finish()
-        try self.assertValidProfileData()
+        try self.assertValidProfileData(expectedAddresses: expectedAddressesB, expectedThreadMetadata: [expectedThreadMetadataB], expectedQueueMetadata: [expectedQueueMetadataB])
 
+        // finish span A and check profile data
         spanA.finish()
-        try self.assertValidProfileData()
+        try self.assertValidProfileData(expectedAddresses: expectedAddressesA, expectedThreadMetadata: [expectedThreadMetadataA], expectedQueueMetadata: [expectedQueueMetadataA])
     }
 
     func testProfileTimeoutTimer() throws {
@@ -311,17 +356,19 @@ class SentryProfilerSwiftTests: XCTestCase {
         try performTest(transactionEnvironment: expectedEnvironment)
     }
 
+    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     func testProfileWithTransactionContainingStartupSpansForColdStart() throws {
-        try performTest(launchType: .cold, prewarmed: false)
+        try performTest(uikitParameters: UIKitParameters(launchType: .cold, prewarmed: false))
     }
 
     func testProfileWithTransactionContainingStartupSpansForWarmStart() throws {
-        try performTest(launchType: .warm, prewarmed: false)
+        try performTest(uikitParameters: UIKitParameters(launchType: .warm, prewarmed: false))
     }
 
     func testProfileWithTransactionContainingStartupSpansForPrewarmedStart() throws {
-        try performTest(launchType: .cold, prewarmed: true)
+        try performTest(uikitParameters: UIKitParameters(launchType: .cold, prewarmed: true))
     }
+#endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
 
     func testProfilingDataContainsEnvironmentSetFromConfigureScope() throws {
         let expectedEnvironment = "test-environment"
@@ -379,6 +426,108 @@ class SentryProfilerSwiftTests: XCTestCase {
             options.profilesSampler = { _ in return -0.01 }
         }
     }
+
+    /// based on ``SentryTracerTests.testFinish_WithoutHub_DoesntCaptureTransaction``
+    func testProfilerCleanedUpAfterTransactionDiscarded_NoHub() throws {
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        func performTransaction() {
+            let sut = SentryTracer(transactionContext: TransactionContext(name: fixture.transactionName, operation: fixture.transactionOperation), hub: nil)
+            XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+            sut.finish()
+        }
+        performTransaction()
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        XCTAssertEqual(self.fixture.client?.captureEventWithScopeInvocations.count, 0)
+    }
+
+    /// based on ``SentryTracerTests.testFinish_WaitForAllChildren_ExceedsMaxDuration_NoTransactionCaptured``
+    func testProfilerCleanedUpAfterTransactionDiscarded_ExceedsMaxDuration() throws {
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        func performTransaction() throws {
+            let sut = try fixture.newTransaction(automaticTransaction: true)
+            XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(1))
+            fixture.currentDateProvider.advance(by: 500)
+            sut.finish()
+        }
+        try performTransaction()
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        XCTAssertEqual(self.fixture.client?.captureEventWithScopeInvocations.count, 0)
+    }
+
+    func testProfilerCleanedUpAfterInFlightTransactionDeallocated() throws {
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        func performTransaction() throws {
+            let sut = try fixture.newTransaction(automaticTransaction: true)
+            XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(1))
+            XCTAssertFalse(sut.isFinished)
+        }
+        try performTransaction()
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        XCTAssertEqual(self.fixture.client?.captureEventWithScopeInvocations.count, 0)
+    }
+
+    /// based on ``SentryTracerTests.testFinish_IdleTimeout_ExceedsMaxDuration_NoTransactionCaptured``
+    func testProfilerCleanedUpAfterTransactionDiscarded_IdleTimeout_ExceedsMaxDuration() throws {
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        func performTransaction() throws {
+            let sut = try fixture.newTransaction(automaticTransaction: true, idleTimeout: 1)
+            XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(1))
+            fixture.currentDateProvider.advance(by: 500)
+            sut.finish()
+        }
+        try performTransaction()
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        XCTAssertEqual(self.fixture.client?.captureEventWithScopeInvocations.count, 0)
+    }
+
+    /// based on ``SentryTracerTests.testIdleTimeout_NoChildren_TransactionNotCaptured``
+    func testProfilerCleanedUpAfterTransactionDiscarded_IdleTimeout_NoChildren() throws {
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        func performTransaction() throws {
+            let span = try fixture.newTransaction(automaticTransaction: true, idleTimeout: 1)
+            XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(1))
+            fixture.currentDateProvider.advance(by: 500)
+            fixture.dispatchQueueWrapper.invokeLastDispatchAfter()
+            XCTAssert(span.isFinished)
+        }
+        try performTransaction()
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        XCTAssertEqual(self.fixture.client?.captureEventWithScopeInvocations.count, 0)
+    }
+
+    /// based on ``SentryTracerTests.testIdleTransaction_CreatingDispatchBlockFails_NoTransactionCaptured``
+    func testProfilerCleanedUpAfterTransactionDiscarded_IdleTransaction_CreatingDispatchBlockFails() throws {
+        fixture.dispatchQueueWrapper.createDispatchBlockReturnsNULL = true
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        func performTransaction() throws {
+            let span = try fixture.newTransaction(automaticTransaction: true, idleTimeout: 1)
+            XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(1))
+            fixture.currentDateProvider.advance(by: 500)
+            span.finish()
+        }
+        try performTransaction()
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        XCTAssertEqual(self.fixture.client?.captureEventWithScopeInvocations.count, 0)
+    }
+
+#if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+    /// based on ``SentryTracerTests.testFinish_WaitForAllChildren_StartTimeModified_NoTransactionCaptured``
+    func testProfilerCleanedUpAfterTransactionDiscarded_WaitForAllChildren_StartTimeModified() throws {
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        let appStartMeasurement = fixture.getAppStartMeasurement(type: .cold)
+        SentrySDK.setAppStartMeasurement(appStartMeasurement)
+        fixture.currentDateProvider.advance(by: 1)
+        func performTransaction() throws {
+            let sut = try fixture.newTransaction(testingAppLaunchSpans: true, automaticTransaction: true)
+            XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(1))
+            fixture.currentDateProvider.advance(by: 499)
+            sut.finish()
+        }
+        try performTransaction()
+        XCTAssertEqual(SentryProfiler.currentProfiledTracers(), UInt(0))
+        XCTAssertEqual(self.fixture.client?.captureEventWithScopeInvocations.count, 0)
+    }
+#endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
 }
 
 private extension SentryProfilerSwiftTests {
@@ -397,31 +546,51 @@ private extension SentryProfilerSwiftTests {
         return try XCTUnwrap(envelope.event as? Transaction)
     }
 
-    /// Keep a thread busy over a long enough period of time (long enough for 3 samples) for the sampler to pick it up.
-    func forceProfilerSample() {
-        let str = "a"
-        var concatStr = ""
-        for _ in 0..<100_000 {
-            concatStr = concatStr.appending(str)
-        }
+    func addMockSamples(threadMetadata: ThreadMetadata = ThreadMetadata(id: 1, priority: 2, name: "test-thread"), queueMetadata: QueueMetadata = QueueMetadata(address: 3, label: "test-queue"), addresses: [NSNumber] = [0x3, 0x4, 0x5]) {
+        let state = SentryProfiler.getCurrent()._state
+        fixture.currentDateProvider.advanceBy(nanoseconds: 1)
+        SentryProfilerMocksSwiftCompatible.appendMockBacktrace(to: state, threadID: threadMetadata.id, threadPriority: threadMetadata.priority, threadName: threadMetadata.name, queueAddress: queueMetadata.address, queueLabel: queueMetadata.label, addresses: addresses)
+        fixture.currentDateProvider.advanceBy(nanoseconds: 1)
+        SentryProfilerMocksSwiftCompatible.appendMockBacktrace(to: state, threadID: threadMetadata.id, threadPriority: threadMetadata.priority, threadName: threadMetadata.name, queueAddress: queueMetadata.address, queueLabel: queueMetadata.label, addresses: addresses)
+        fixture.currentDateProvider.advanceBy(nanoseconds: 1)
+        SentryProfilerMocksSwiftCompatible.appendMockBacktrace(to: state, threadID: threadMetadata.id, threadPriority: threadMetadata.priority, threadName: threadMetadata.name, queueAddress: queueMetadata.address, queueLabel: queueMetadata.label, addresses: addresses)
     }
 
-    func performTest(transactionEnvironment: String = kSentryDefaultEnvironment, shouldTimeOut: Bool = false, launchType: SentryAppStartType? = nil, prewarmed: Bool = false) throws {
+    struct UIKitParameters {
+        #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+        var launchType: SentryAppStartType
+        var prewarmed: Bool
+        #endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+    }
+
+    func performTest(transactionEnvironment: String = kSentryDefaultEnvironment, shouldTimeOut: Bool = false, uikitParameters: UIKitParameters? = nil) throws {
         var testingAppLaunchSpans = false
-        if let launchType = launchType {
+
+            #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+        if let uikitParameters = uikitParameters {
             testingAppLaunchSpans = true
-            let appStartMeasurement = fixture.getAppStartMeasurement(type: launchType, preWarmed: prewarmed)
+            let appStartMeasurement = fixture.getAppStartMeasurement(type: uikitParameters.launchType, preWarmed: uikitParameters.prewarmed)
             SentrySDK.setAppStartMeasurement(appStartMeasurement)
         }
+#endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
 
         let span = try fixture.newTransaction(testingAppLaunchSpans: testingAppLaunchSpans)
-        forceProfilerSample()
+
+        addMockSamples()
         fixture.currentDateProvider.advance(by: 31)
         if shouldTimeOut {
-            fixture.timeoutTimerWrapper.fire()
+            DispatchQueue.main.async {
+                self.fixture.timeoutTimerFactory.fire()
+            }
         }
 
-        span.finish()
+        let exp = expectation(description: "finished span")
+        DispatchQueue.main.async {
+            span.finish()
+            exp.fulfill()
+        }
+
+        waitForExpectations(timeout: 1)
 
         try self.assertValidProfileData(transactionEnvironment: transactionEnvironment, shouldTimeout: shouldTimeOut)
     }
@@ -434,12 +603,12 @@ private extension SentryProfilerSwiftTests {
 
         let expectedUsageReadings = fixture.mockUsageReadingsPerBatch * metricsBatches
 
-        for (i, expectedUsage) in fixture.mockCPUUsages.enumerated() {
-            let key = NSString(format: kSentryMetricProfilerSerializationKeyCPUUsageFormat as NSString, i) as String
-            try assertMetricValue(measurements: measurements, key: key, numberOfReadings: expectedUsageReadings, expectedValue: expectedUsage, transaction: transaction)
-        }
+        try assertMetricValue(measurements: measurements, key: kSentryMetricProfilerSerializationKeyCPUUsage, numberOfReadings: expectedUsageReadings, expectedValue: fixture.mockCPUUsage, transaction: transaction, expectedUnits: kSentryMetricProfilerSerializationUnitPercentage)
 
-        try assertMetricValue(measurements: measurements, key: kSentryMetricProfilerSerializationKeyMemoryFootprint, numberOfReadings: expectedUsageReadings, expectedValue: fixture.mockMemoryFootprint, transaction: transaction)
+        try assertMetricValue(measurements: measurements, key: kSentryMetricProfilerSerializationKeyMemoryFootprint, numberOfReadings: expectedUsageReadings, expectedValue: fixture.mockMemoryFootprint, transaction: transaction, expectedUnits: kSentryMetricProfilerSerializationUnitBytes)
+
+        // we wind up with one less energy reading. since we must use the difference between readings to get actual values, the first one is only the baseline reading.
+        try assertMetricValue(measurements: measurements, key: kSentryMetricProfilerSerializationKeyCPUEnergyUsage, numberOfReadings: expectedUsageReadings - 1, expectedValue: fixture.mockEnergyUsage, transaction: transaction, expectedUnits: kSentryMetricProfilerSerializationUnitNanoJoules)
 
 #if !os(macOS)
         try assertMetricEntries(measurements: measurements, key: kSentryProfilerSerializationKeySlowFrameRenders, expectedEntries: fixture.expectedSlowFrames, transaction: transaction)
@@ -486,7 +655,7 @@ private extension SentryProfilerSwiftTests {
         }
     }
 
-    func assertMetricValue<T: Equatable>(measurements: [String: Any], key: String, numberOfReadings: Int, expectedValue: T? = nil, transaction: Transaction) throws {
+    func assertMetricValue<T: Equatable>(measurements: [String: Any], key: String, numberOfReadings: Int, expectedValue: T? = nil, transaction: Transaction, expectedUnits: String) throws {
         let metricContainer = try XCTUnwrap(measurements[key] as? [String: Any])
         let values = try XCTUnwrap(metricContainer["values"] as? [[String: Any]])
         XCTAssertEqual(values.count, numberOfReadings, "Wrong number of values under \(key)")
@@ -497,6 +666,9 @@ private extension SentryProfilerSwiftTests {
 
             let timestamp = try XCTUnwrap(values[0]["elapsed_since_start_ns"] as? NSString)
             try assertTimestampOccursWithinTransaction(timestamp: timestamp, transaction: transaction)
+
+            let actualUnits = try XCTUnwrap(metricContainer["unit"] as? String)
+            XCTAssertEqual(actualUnits, expectedUnits)
         }
     }
 
@@ -508,7 +680,18 @@ private extension SentryProfilerSwiftTests {
         XCTAssertLessThanOrEqual(timestampNumericValue, transactionDuration)
     }
 
-    func assertValidProfileData(transactionEnvironment: String = kSentryDefaultEnvironment, shouldTimeout: Bool = false) throws {
+    struct ThreadMetadata {
+        var id: UInt64
+        var priority: Int32
+        var name: String
+    }
+
+    struct QueueMetadata {
+        var address: UInt64
+        var label: String
+    }
+
+    func assertValidProfileData(transactionEnvironment: String = kSentryDefaultEnvironment, shouldTimeout: Bool = false, expectedAddresses: [NSNumber]? = nil, expectedThreadMetadata: [ThreadMetadata]? = nil, expectedQueueMetadata: [QueueMetadata]? = nil) throws {
         let data = try getLatestProfileData()
         let profile = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
 
@@ -557,11 +740,29 @@ private extension SentryProfilerSwiftTests {
 
         let sampledProfile = try XCTUnwrap(profile["profile"] as? [String: Any])
         let threadMetadata = try XCTUnwrap(sampledProfile["thread_metadata"] as? [String: [String: Any]])
-        let queueMetadata = try XCTUnwrap(sampledProfile["queue_metadata"] as? [String: Any])
+        let queueMetadata = try XCTUnwrap(sampledProfile["queue_metadata"] as? [String: [String: Any]])
         XCTAssertFalse(threadMetadata.isEmpty)
-        XCTAssertFalse(try threadMetadata.values.compactMap { $0["priority"] }.filter { try XCTUnwrap($0 as? Int) > 0 }.isEmpty)
+        if let expectedThreadMetadata = expectedThreadMetadata {
+            try expectedThreadMetadata.forEach {
+                let actualThreadMetadata = try XCTUnwrap(threadMetadata["\($0.id)"])
+                let actualThreadPriority = try XCTUnwrap(actualThreadMetadata["priority"] as? Int32)
+                XCTAssertEqual(actualThreadPriority, $0.priority)
+                let actualThreadName = try XCTUnwrap(actualThreadMetadata["name"] as? String)
+                XCTAssertEqual(actualThreadName, $0.name)
+            }
+        } else {
+            XCTAssertFalse(try threadMetadata.values.compactMap { $0["priority"] }.filter { try XCTUnwrap($0 as? Int) > 0 }.isEmpty)
+        }
         XCTAssertFalse(queueMetadata.isEmpty)
-        XCTAssertFalse(try XCTUnwrap(try XCTUnwrap(queueMetadata.first?.value as? [String: Any])["label"] as? String).isEmpty)
+        if let expectedQueueMetadata = expectedQueueMetadata {
+            try expectedQueueMetadata.forEach {
+                let actualQueueMetadata = try XCTUnwrap(queueMetadata[sentry_formatHexAddressUInt64($0.address)])
+                let actualQueueLabel = try XCTUnwrap(actualQueueMetadata["label"] as? String)
+                XCTAssertEqual(actualQueueLabel, $0.label)
+            }
+        } else {
+            XCTAssertFalse(try XCTUnwrap(try XCTUnwrap(queueMetadata.first?.value)["label"] as? String).isEmpty)
+        }
 
         let samples = try XCTUnwrap(sampledProfile["samples"] as? [[String: Any]])
         XCTAssertFalse(samples.isEmpty)
@@ -639,7 +840,7 @@ private extension SentryProfilerSwiftTests {
         Dynamic(hub).tracesSampler.random = TestRandom(value: 1.0)
 
         let span = try fixture.newTransaction()
-        forceProfilerSample()
+        addMockSamples()
         fixture.currentDateProvider.advance(by: 5)
         span.finish()
 

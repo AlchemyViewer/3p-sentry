@@ -1,7 +1,34 @@
-//
-//  Use this file to import your target's public headers that you would like to
-//  expose to Swift.
-//
+#if !TARGET_OS_WATCH
+#    import "SentryReachability.h"
+#endif // !TARGET_OS_WATCH
+
+#import "SentryDefines.h"
+#import "SentryProfilingConditionals.h"
+
+#if SENTRY_HAS_METRIC_KIT
+#    import "SentryMetricKitIntegration.h"
+#endif // SENTRY_HAS_METRIC_KIT
+
+#if SENTRY_HAS_UIKIT
+#    import "MockUIScene.h"
+#    import "SentryFramesTracker+TestInit.h"
+#    import "SentryUIApplication.h"
+#    import "SentryUIDeviceWrapper.h"
+#    import "SentryUIEventTracker.h"
+#    import "SentryUIEventTrackingIntegration.h"
+#    import "SentryUIViewControllerPerformanceTracker.h"
+#    import "SentryUIViewControllerSwizzling+Test.h"
+#    import "SentryUIViewControllerSwizzling.h"
+#endif // SENTRY_HAS_UIKIT
+
+#if SENTRY_TARGET_PROFILING_SUPPORTED
+#    import "SentryMetricProfiler.h"
+#    import "SentryProfiler+Private.h"
+#    import "SentryProfiler+Test.h"
+#    import "SentryProfilerMocksSwiftCompatible.h"
+#    import "SentryProfilerState.h"
+#endif // SENTRY_TARGET_PROFILING_SUPPORTED
+
 #import "NSData+Sentry.h"
 #import "NSData+SentryCompression.h"
 #import "NSDate+SentryExtras.h"
@@ -31,7 +58,7 @@
 #import "SentryClientReport.h"
 #import "SentryConcurrentRateLimitsDictionary.h"
 #import "SentryCoreDataSwizzling.h"
-#import "SentryCoreDataTracker.h"
+#import "SentryCoreDataTracker+Test.h"
 #import "SentryCoreDataTrackingIntegration.h"
 #import "SentryCrashBinaryImageProvider.h"
 #import "SentryCrashC.h"
@@ -55,14 +82,13 @@
 #import "SentryCrashStackEntryMapper.h"
 #import "SentryCrashUUIDConversion.h"
 #import "SentryCrashWrapper.h"
-#import "SentryCurrentDate.h"
+#import "SentryCurrentDateProvider.h"
 #import "SentryDataCategory.h"
 #import "SentryDataCategoryMapper.h"
 #import "SentryDateUtil.h"
 #import "SentryDebugImageProvider+TestInit.h"
 #import "SentryDebugImageProvider.h"
 #import "SentryDebugMeta.h"
-#import "SentryDefaultCurrentDateProvider.h"
 #import "SentryDefaultObjCRuntimeWrapper.h"
 #import "SentryDefaultRateLimits.h"
 #import "SentryDependencyContainer.h"
@@ -83,8 +109,6 @@
 #import "SentryFormatter.h"
 #import "SentryFrame.h"
 #import "SentryFrameRemover.h"
-#import "SentryFramesTracker+TestInit.h"
-#import "SentryFramesTracker.h"
 #import "SentryFramesTrackingIntegration.h"
 #import "SentryGlobalEventProcessor.h"
 #import "SentryHttpDateParser.h"
@@ -104,14 +128,12 @@
 #import "SentryMechanism.h"
 #import "SentryMechanismMeta.h"
 #import "SentryMeta.h"
-#import "SentryMetricKitIntegration.h"
-#import "SentryMetricProfiler.h"
 #import "SentryMigrateSessionInit.h"
 #import "SentryNSDataTracker.h"
 #import "SentryNSError.h"
 #import "SentryNSNotificationCenterWrapper.h"
 #import "SentryNSProcessInfoWrapper.h"
-#import "SentryNSTimerWrapper.h"
+#import "SentryNSTimerFactory.h"
 #import "SentryNSURLRequest.h"
 #import "SentryNSURLRequestBuilder.h"
 #import "SentryNSURLSessionTaskSearch.h"
@@ -124,12 +146,10 @@
 #import "SentryPerformanceTracker.h"
 #import "SentryPerformanceTrackingIntegration.h"
 #import "SentryPredicateDescriptor.h"
-#import "SentryProfiler+SwiftTest.h"
 #import "SentryQueueableRequestManager.h"
 #import "SentryRandom.h"
 #import "SentryRateLimitParser.h"
 #import "SentryRateLimits.h"
-#import "SentryReachability.h"
 #import "SentryRetryAfterHeaderParser.h"
 #import "SentrySDK+Private.h"
 #import "SentrySDK+Tests.h"
@@ -166,11 +186,6 @@
 #import "SentryTransport.h"
 #import "SentryTransportAdapter.h"
 #import "SentryTransportFactory.h"
-#import "SentryUIApplication.h"
-#import "SentryUIDeviceWrapper.h"
-#import "SentryUIViewControllerPerformanceTracker.h"
-#import "SentryUIViewControllerSwizzling+Test.h"
-#import "SentryUIViewControllerSwizzling.h"
 #import "SentryUserFeedback.h"
 #import "SentryViewHierarchy.h"
 #import "SentryViewHierarchyIntegration.h"
@@ -186,6 +201,7 @@
 #import "UIViewController+Sentry.h"
 #import "URLSessionTaskMock.h"
 @import SentryPrivate;
+#import "SentryBinaryImageCache+Private.h"
 #import "SentryCrashBinaryImageCache.h"
 #import "SentryDispatchFactory.h"
 #import "SentryDispatchSourceWrapper.h"
@@ -194,14 +210,9 @@
 #import "SentryMeasurementValue.h"
 #import "SentryNSProcessInfoWrapper.h"
 #import "SentryPerformanceTracker+Testing.h"
+#import "SentryPropagationContext.h"
 #import "SentrySampleDecision+Private.h"
 #import "SentrySpanOperations.h"
 #import "SentryTimeToDisplayTracker.h"
 #import "SentryTracerConfiguration.h"
 #import "TestSentryViewHierarchy.h"
-#if SENTRY_HAS_UIKIT
-#    import "MockUIScene.h"
-#    import "SentryUIEventTracker.h"
-#    import "SentryUIEventTrackingIntegration.h"
-#    import "SentryUIViewControllerPerformanceTracker.h"
-#endif

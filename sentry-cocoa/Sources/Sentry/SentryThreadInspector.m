@@ -1,4 +1,5 @@
 #import "SentryThreadInspector.h"
+#import "SentryBinaryImageCache.h"
 #import "SentryCrashDefaultMachineContextWrapper.h"
 #import "SentryCrashStackCursor.h"
 #include "SentryCrashStackCursor_MachineContext.h"
@@ -71,6 +72,8 @@ getStackEntriesFromThread(SentryCrashThread thread, struct SentryCrashMachineCon
         [[SentryCrashStackEntryMapper alloc] initWithInAppLogic:inAppLogic];
     SentryStacktraceBuilder *stacktraceBuilder =
         [[SentryStacktraceBuilder alloc] initWithCrashStackEntryMapper:crashStackEntryMapper];
+    stacktraceBuilder.symbolicate = options.debug;
+
     id<SentryCrashMachineContextWrapper> machineContextWrapper =
         [[SentryCrashDefaultMachineContextWrapper alloc] init];
     return [self initWithStacktraceBuilder:stacktraceBuilder

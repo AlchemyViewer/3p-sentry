@@ -1,8 +1,14 @@
+#if __has_include(<Sentry/PrivatesHeader.h>)
+#    import <Sentry/PrivatesHeader.h>
+#else
+#    import "PrivatesHeader.h"
+#endif
+
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class SentryNSTimerWrapper, SentryDispatchQueueWrapper, SentryProfilesSamplerDecision;
+@class SentryNSTimerFactory, SentryDispatchQueueWrapper, SentryProfilesSamplerDecision;
 
 @interface SentryTracerConfiguration : NSObject
 
@@ -25,10 +31,12 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @property (nonatomic, strong, nullable) SentryDispatchQueueWrapper *dispatchQueueWrapper;
 
+#if SENTRY_TARGET_PROFILING_SUPPORTED
 /**
  * Whether to sample a profile corresponding to this transaction
  */
 @property (nonatomic, strong, nullable) SentryProfilesSamplerDecision *profilesSamplerDecision;
+#endif // SENTRY_TARGET_PROFILING_SUPPORTED"
 
 /**
  * The idle time to wait until to finish the transaction
@@ -40,7 +48,7 @@ NS_ASSUME_NONNULL_BEGIN
 /**
  * A writer around NSTimer, to make it testable
  */
-@property (nonatomic, strong, nullable) SentryNSTimerWrapper *timerWrapper;
+@property (nonatomic, strong, nullable) SentryNSTimerFactory *timerFactory;
 
 + (SentryTracerConfiguration *)configurationWithBlock:
     (void (^)(SentryTracerConfiguration *configuration))block;

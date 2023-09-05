@@ -1,8 +1,13 @@
 #import "SentryEvent+Private.h"
+#import "SentryHub+TestInit.h"
 #import "SentryId.h"
 #import "SentryProfileTimeseries.h"
+#import "SentryProfiler+Private.h"
 #import "SentryProfiler+Test.h"
+#import "SentryProfilerMocks.h"
+#import "SentryProfilerState+ObjCpp.h"
 #import "SentryProfilingConditionals.h"
+#import "SentryScreenFrames.h"
 #import "SentryThread.h"
 #import "SentryTransaction.h"
 #import "SentryTransactionContext+Private.h"
@@ -60,7 +65,7 @@ using namespace sentry::profiling;
 
 - (void)testProfilerMutationDuringSlicing
 {
-    SentryProfilingState *state = [[SentryProfilingState alloc] init];
+    SentryProfilerState *state = [[SentryProfilerState alloc] init];
     // generate a large timeseries of simulated data
 
     const auto threads = 5;
@@ -73,22 +78,15 @@ using namespace sentry::profiling;
         const auto queue = thread + threads * 3;
         uint64_t address = thread + threads * 4;
 
-        ThreadMetadata threadMetadata;
-        threadMetadata.name = [[NSString stringWithFormat:@"testThread-%d", thread]
+        const auto threadName = [[NSString stringWithFormat:@"testThread-%d", thread]
             cStringUsingEncoding:NSUTF8StringEncoding];
-        threadMetadata.threadID = threadID;
-        threadMetadata.priority = threadPriority;
-
-        QueueMetadata queueMetadata;
-        queueMetadata.address = queue;
-        queueMetadata.label = std::make_shared<std::string>([[NSString
-            stringWithFormat:@"testQueue-%d", thread] cStringUsingEncoding:NSUTF8StringEncoding]);
-
-        Backtrace backtrace;
-        backtrace.threadMetadata = threadMetadata;
-        backtrace.queueMetadata = queueMetadata;
-        backtrace.addresses
+        const auto queueLabel = std::string([[NSString stringWithFormat:@"testQueue-%d", thread]
+            cStringUsingEncoding:NSUTF8StringEncoding]);
+        const auto addresses
             = std::vector<std::uintptr_t>({ address + 1, address + 2, address + 3 });
+
+        auto backtrace
+            = mockBacktrace(threadID, threadPriority, threadName, queue, queueLabel, addresses);
 
         for (auto sample = 0; sample < samplesPerThread; sample++) {
             backtrace.absoluteTimestamp = sampleIdx; // simulate 1 sample per nanosecond
@@ -103,42 +101,26 @@ using namespace sentry::profiling;
 
     const auto operations = 50;
 
-    const auto context = [[SentrySpanContext alloc] initWithOperation:@"test trace"];
-    const auto trace = [[SentryTracer alloc] initWithContext:context];
-    const auto transaction = [[SentryTransaction alloc] initWithTrace:trace children:@[]];
-    transaction.startSystemTime = arc4random() % sampleIdx;
-    const auto remainingTime = sampleIdx - transaction.startSystemTime;
+    const auto startSystemTime = arc4random() % sampleIdx;
+    const auto remainingTime = sampleIdx - startSystemTime;
     const auto minDuration = 10;
-    transaction.endSystemTime = transaction.startSystemTime
-        + (arc4random() % (remainingTime - minDuration) + minDuration + 1);
+    const auto endSystemTime
+        = startSystemTime + (arc4random() % (remainingTime - minDuration) + minDuration + 1);
 
     const auto sliceExpectation =
         [self expectationWithDescription:@"all slice operations complete"];
     sliceExpectation.expectedFulfillmentCount = operations;
 
     void (^sliceBlock)(void) = ^(void) {
-        [state mutate:^(SentryProfilingMutableState *mutableState) {
-            __unused const auto slice = slicedProfileSamples(mutableState.samples, transaction);
+        [state mutate:^(SentryProfilerMutableState *mutableState) {
+            __unused const auto slice
+                = slicedProfileSamples(mutableState.samples, startSystemTime, endSystemTime);
             [sliceExpectation fulfill];
         }];
     };
 
-    ThreadMetadata threadMetadata;
-    threadMetadata.name = "testThread";
-    threadMetadata.threadID = 12345568910;
-    threadMetadata.priority = 666;
-
-    QueueMetadata queueMetadata;
-    queueMetadata.address = 9876543210;
-    queueMetadata.label = std::make_shared<std::string>("testQueue");
-
-    const auto addresses = std::vector<std::uintptr_t>({ 777, 888, 789 });
-
-    Backtrace backtrace;
-    backtrace.threadMetadata = threadMetadata;
-    backtrace.queueMetadata = queueMetadata;
-    backtrace.absoluteTimestamp = 5;
-    backtrace.addresses = addresses;
+    const auto backtrace = mockBacktrace(12345568910, 666, "testThread", 9876543210, "testQueue",
+        std::vector<std::uintptr_t>({ 777, 888, 789 }));
 
     const auto mutateExpectation =
         [self expectationWithDescription:@"all mutating operations complete"];
@@ -146,7 +128,7 @@ using namespace sentry::profiling;
 
     void (^mutateBlock)(void) = ^(void) {
         [state mutate:^(
-            __unused SentryProfilingMutableState *mutableState) { [mutateExpectation fulfill]; }];
+            __unused SentryProfilerMutableState *mutableState) { [mutateExpectation fulfill]; }];
     };
 
     const auto sliceOperations = [[NSOperationQueue alloc] init]; // concurrent queue
@@ -175,22 +157,12 @@ using namespace sentry::profiling;
  */
 - (void)testProfilerMutationDuringSerialization
 {
-    SentryProfilingState *state = [[SentryProfilingState alloc] init];
+    SentryProfilerState *state = [[SentryProfilerState alloc] init];
     // initialize the data structures with some simulated data
     {
-        ThreadMetadata threadMetadata;
         // leave thread name as nil so it can be overwritten later
-        threadMetadata.threadID = 1;
-        threadMetadata.priority = 2;
-
-        QueueMetadata queueMetadata;
-        queueMetadata.address = 3;
-        queueMetadata.label = std::make_shared<std::string>("testQueue-1");
-
-        Backtrace backtrace;
-        backtrace.threadMetadata = threadMetadata;
-        backtrace.queueMetadata = queueMetadata;
-        backtrace.addresses = std::vector<std::uintptr_t>({ 0x4, 0x5, 0x6 });
+        auto backtrace = mockBacktrace(
+            1, 2, nullptr, 3, "testQueue-1", std::vector<std::uintptr_t>({ 0x4, 0x5, 0x6 }));
 
         backtrace.absoluteTimestamp = 1;
         [state appendBacktrace:backtrace];
@@ -202,60 +174,34 @@ using namespace sentry::profiling;
     // serialize the data as if it were captured in a transaction envelope
     const auto profileData = [state copyProfilingData];
 
-    const auto context = [[SentrySpanContext alloc] initWithOperation:@"test trace"];
-    const auto trace = [[SentryTracer alloc] initWithContext:context];
-    const auto transaction = [[SentryTransaction alloc] initWithTrace:trace children:@[]];
-    transaction.transaction = @"someTransaction";
-    transaction.trace.transactionContext =
-        [[SentryTransactionContext alloc] initWithName:@"someTransaction"
-                                             operation:@"someOperation"];
-    transaction.trace.transactionContext.threadInfo = [[SentryThread alloc] initWithThreadId:@1];
-    transaction.startSystemTime = 1;
-    transaction.endSystemTime = 2;
-
     const auto profileID = [[SentryId alloc] init];
-    const auto serialization = serializedProfileData(profileData, transaction, profileID,
-        profilerTruncationReasonName(SentryProfilerTruncationReasonNormal), @"test", @"someRelease",
-        @{}, @[]);
+    const auto serialization = serializedProfileData(profileData, 1, 2, profileID,
+        profilerTruncationReasonName(SentryProfilerTruncationReasonNormal), @{}, @[],
+        [[SentryHub alloc] initWithClient:nil andScope:nil]
+#    if SENTRY_HAS_UIKIT
+        ,
+        [[SentryScreenFrames alloc] initWithTotal:5
+                                           frozen:6
+                                             slow:7
+                              slowFrameTimestamps:@[]
+                            frozenFrameTimestamps:@[]
+                              frameRateTimestamps:@[]]
+#    endif // SENTRY_HAS_UIKIT
+    );
 
     // cause the data structures to be modified again: add new addresses
     {
-        ThreadMetadata threadMetadata;
-        threadMetadata.name = "newThread-2";
-        threadMetadata.threadID = 12345568910;
-        threadMetadata.priority = 666;
-
-        QueueMetadata queueMetadata;
-        queueMetadata.address = 9876543210;
-        queueMetadata.label = std::make_shared<std::string>("newQueue-2");
-
-        Backtrace backtrace;
-        backtrace.threadMetadata = threadMetadata;
-        backtrace.queueMetadata = queueMetadata;
-        backtrace.absoluteTimestamp = 5;
-        backtrace.addresses = std::vector<std::uintptr_t>({ 0x777, 0x888, 0x999 });
-
+        const auto backtrace = mockBacktrace(12345568910, 666, "newThread-2", 9876543210,
+            "newQueue-2", std::vector<std::uintptr_t>({ 0x777, 0x888, 0x999 }));
         [state appendBacktrace:backtrace];
     }
 
     // cause the data structures to be modified again: overwrite previous thread metadata
     // subdictionary contents
     {
-        ThreadMetadata threadMetadata;
-        threadMetadata.name = "testThread-1";
-        threadMetadata.threadID = 1;
-        threadMetadata.priority = 2;
-
-        QueueMetadata queueMetadata;
-        queueMetadata.address = 3;
-        queueMetadata.label = std::make_shared<std::string>("testQueue-1");
-
-        Backtrace backtrace;
-        backtrace.threadMetadata = threadMetadata;
-        backtrace.queueMetadata = queueMetadata;
+        auto backtrace = mockBacktrace(
+            1, 2, "testThread-1", 3, "testQueue-1", std::vector<std::uintptr_t>({ 0x4, 0x5, 0x6 }));
         backtrace.absoluteTimestamp = 6;
-        backtrace.addresses = std::vector<std::uintptr_t>({ 0x4, 0x5, 0x6 });
-
         [state appendBacktrace:backtrace];
     }
 
@@ -287,55 +233,22 @@ using namespace sentry::profiling;
 
 - (void)testProfilerPayload
 {
-    SentryProfilingState *state = [[SentryProfilingState alloc] init];
+    SentryProfilerState *state = [[SentryProfilerState alloc] init];
 
     // record an initial backtrace
-
-    ThreadMetadata threadMetadata1;
-    threadMetadata1.name = "testThread";
-    threadMetadata1.threadID = 12345568910;
-    threadMetadata1.priority = 666;
-
-    QueueMetadata queueMetadata1;
-    queueMetadata1.address = 9876543210;
-    queueMetadata1.label = std::make_shared<std::string>("testQueue");
-
-    const auto addresses1 = std::vector<std::uintptr_t>({ 0x123, 0x456, 0x789 });
-
-    Backtrace backtrace1;
-    backtrace1.threadMetadata = threadMetadata1;
-    backtrace1.queueMetadata = queueMetadata1;
-    backtrace1.absoluteTimestamp = 5;
-    backtrace1.addresses = addresses1;
-
+    const auto backtrace1 = mockBacktrace(12345568910, 666, "testThread", 9876543210, "testQueue",
+        std::vector<std::uintptr_t>({ 0x123, 0x456, 0x789 }));
     [state appendBacktrace:backtrace1];
 
     // record a second backtrace with some common addresses to test frame deduplication
-
-    ThreadMetadata threadMetadata2;
-    threadMetadata2.name = "testThread";
-    threadMetadata2.threadID = 12345568910;
-    threadMetadata2.priority = 666;
-
-    QueueMetadata queueMetadata2;
-    queueMetadata2.address = 9876543210;
-    queueMetadata2.label = std::make_shared<std::string>("testQueue");
-
-    const auto addresses2 = std::vector<std::uintptr_t>({ 0x777, 0x888, 0x789 });
-
-    Backtrace backtrace2;
-    backtrace2.threadMetadata = threadMetadata2;
-    backtrace2.queueMetadata = queueMetadata2;
-    backtrace2.absoluteTimestamp = 5;
-    backtrace2.addresses = addresses2;
-
+    const auto backtrace2 = mockBacktrace(12345568910, 666, "testThread", 9876543210, "testQueue",
+        std::vector<std::uintptr_t>({ 0x777, 0x888, 0x789 }));
     [state appendBacktrace:backtrace2];
 
     // record a third backtrace that's identical to the second to test stack/frame deduplication
-
     [state appendBacktrace:backtrace2];
 
-    [state mutate:^(SentryProfilingMutableState *mutableState) {
+    [state mutate:^(SentryProfilerMutableState *mutableState) {
         XCTAssertEqual(mutableState.frames.count, 5UL);
         const auto expectedOrdered = @[
             @"0x0000000000000123", @"0x0000000000000456", @"0x0000000000000789",

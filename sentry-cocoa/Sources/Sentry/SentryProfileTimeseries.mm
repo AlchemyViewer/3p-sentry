@@ -5,6 +5,7 @@
 #    import "SentryEvent+Private.h"
 #    import "SentryInternalDefines.h"
 #    import "SentryLog.h"
+#    import "SentrySample.h"
 #    import "SentryTransaction.h"
 
 /**
@@ -15,9 +16,10 @@
  */
 void
 logSlicingFailureWithArray(
-    NSArray<SentrySample *> *array, SentryTransaction *transaction, BOOL start)
+    NSArray<SentrySample *> *array, uint64_t startSystemTime, uint64_t endSystemTime, BOOL start)
 {
-    if (!SENTRY_CASSERT(array.count > 0, @"Should not have attempted to slice an empty array.")) {
+    if (!SENTRY_CASSERT_RETURN(
+            array.count > 0, @"Should not have attempted to slice an empty array.")) {
         return;
     }
 
@@ -27,52 +29,48 @@ logSlicingFailureWithArray(
 
     const auto firstSampleAbsoluteTime = array.firstObject.absoluteTimestamp;
     const auto lastSampleAbsoluteTime = array.lastObject.absoluteTimestamp;
-    const auto firstSampleRelativeToTransactionStart
-        = firstSampleAbsoluteTime - transaction.startSystemTime;
-    const auto lastSampleRelativeToTransactionStart
-        = lastSampleAbsoluteTime - transaction.startSystemTime;
+    const auto firstSampleRelativeToTransactionStart = firstSampleAbsoluteTime - startSystemTime;
+    const auto lastSampleRelativeToTransactionStart = lastSampleAbsoluteTime - startSystemTime;
     SENTRY_LOG_DEBUG(@"[slice %@] Could not find any%@ sample taken during the transaction "
                      @"(first sample taken at: %llu; last: %llu; transaction start: %llu; end: "
                      @"%llu; first sample relative to transaction start: %lld; last: %lld).",
         start ? @"start" : @"end", start ? @"" : @" other", firstSampleAbsoluteTime,
-        lastSampleAbsoluteTime, transaction.startSystemTime, transaction.endSystemTime,
+        lastSampleAbsoluteTime, startSystemTime, endSystemTime,
         firstSampleRelativeToTransactionStart, lastSampleRelativeToTransactionStart);
 }
 
 NSArray<SentrySample *> *_Nullable slicedProfileSamples(
-    NSArray<SentrySample *> *samples, SentryTransaction *transaction)
+    NSArray<SentrySample *> *samples, uint64_t startSystemTime, uint64_t endSystemTime)
 {
     if (samples.count == 0) {
         return nil;
     }
 
-    const auto transactionStart = transaction.startSystemTime;
     const auto firstIndex =
         [samples indexOfObjectWithOptions:NSEnumerationConcurrent
                               passingTest:^BOOL(SentrySample *_Nonnull sample, NSUInteger idx,
                                   BOOL *_Nonnull stop) {
-                                  *stop = sample.absoluteTimestamp >= transactionStart;
+                                  *stop = sample.absoluteTimestamp >= startSystemTime;
                                   return *stop;
                               }];
 
     if (firstIndex == NSNotFound) {
-        logSlicingFailureWithArray(samples, transaction, /*start*/ YES);
+        logSlicingFailureWithArray(samples, startSystemTime, endSystemTime, /*start*/ YES);
         return nil;
     } else {
         SENTRY_LOG_DEBUG(@"Found first slice sample at index %lu", firstIndex);
     }
 
-    const auto transactionEnd = transaction.endSystemTime;
     const auto lastIndex =
         [samples indexOfObjectWithOptions:NSEnumerationConcurrent | NSEnumerationReverse
                               passingTest:^BOOL(SentrySample *_Nonnull sample, NSUInteger idx,
                                   BOOL *_Nonnull stop) {
-                                  *stop = sample.absoluteTimestamp <= transactionEnd;
+                                  *stop = sample.absoluteTimestamp <= endSystemTime;
                                   return *stop;
                               }];
 
     if (lastIndex == NSNotFound) {
-        logSlicingFailureWithArray(samples, transaction, /*start*/ NO);
+        logSlicingFailureWithArray(samples, startSystemTime, endSystemTime, /*start*/ NO);
         return nil;
     } else {
         SENTRY_LOG_DEBUG(@"Found last slice sample at index %lu", lastIndex);
@@ -82,8 +80,5 @@ NSArray<SentrySample *> *_Nullable slicedProfileSamples(
     const auto indices = [NSIndexSet indexSetWithIndexesInRange:range];
     return [samples objectsAtIndexes:indices];
 }
-
-@implementation SentrySample
-@end
 
 #endif // SENTRY_TARGET_PROFILING_SUPPORTED

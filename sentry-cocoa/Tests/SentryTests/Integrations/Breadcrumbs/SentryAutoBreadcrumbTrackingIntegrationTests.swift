@@ -5,7 +5,7 @@ import XCTest
 class SentryAutoBreadcrumbTrackingIntegrationTests: XCTestCase {
     
     private class Fixture {
-        let tracker = SentryTestBreadcrumbTracker(swizzleWrapper: SentrySwizzleWrapper.sharedInstance)
+        let tracker = SentryTestBreadcrumbTracker()
         
         var systemEventBreadcrumbs: SentryTestSystemEventBreadcrumbs?
         
@@ -85,7 +85,7 @@ class SentryAutoBreadcrumbTrackingIntegrationTests: XCTestCase {
     
     private func install(sut: SentryAutoBreadcrumbTrackingIntegration, options: Options = Options()) throws {
         
-        fixture.systemEventBreadcrumbs = SentryTestSystemEventBreadcrumbs(fileManager: try TestFileManager(options: options), andCurrentDateProvider: TestCurrentDateProvider(), andNotificationCenterWrapper: TestNSNotificationCenterWrapper())
+        fixture.systemEventBreadcrumbs = SentryTestSystemEventBreadcrumbs(fileManager: try TestFileManager(options: options), andNotificationCenterWrapper: TestNSNotificationCenterWrapper())
         
         sut.install(with: options, breadcrumbTracker: fixture.tracker, systemEventBreadcrumbs: fixture.systemEventBreadcrumbs!)
     }

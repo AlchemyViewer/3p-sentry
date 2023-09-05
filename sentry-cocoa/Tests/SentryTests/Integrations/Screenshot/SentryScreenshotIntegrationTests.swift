@@ -1,8 +1,9 @@
+#if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+
 import Sentry
 import SentryTestUtils
 import XCTest
 
-#if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
 class SentryScreenshotIntegrationTests: XCTestCase {
     
     private class Fixture {
@@ -116,7 +117,8 @@ class SentryScreenshotIntegrationTests: XCTestCase {
         
         XCTAssertEqual(newAttachmentList?.count, 0)
     }
-    
+
+#if os(iOS) || targetEnvironment(macCatalyst)
     func test_noScreenShot_MetricKitEvent() {
         let sut = fixture.getSut()
         
@@ -124,6 +126,7 @@ class SentryScreenshotIntegrationTests: XCTestCase {
         
         XCTAssertEqual(newAttachmentList?.count, 0)
     }
+#endif // os(iOS) || targetEnvironment(macCatalyst)
     
     func test_noScreenshot_keepAttachment() {
         let sut = fixture.getSut()
@@ -160,4 +163,5 @@ class SentryScreenshotIntegrationTests: XCTestCase {
     }
     
 }
-#endif
+
+#endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)

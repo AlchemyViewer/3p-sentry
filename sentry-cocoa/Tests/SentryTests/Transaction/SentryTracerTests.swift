@@ -25,7 +25,7 @@ class SentryTracerTests: XCTestCase {
         let hub: TestHub
         let scope: Scope
         let dispatchQueue = TestSentryDispatchQueueWrapper()
-        let timerWrapper = TestSentryNSTimerWrapper()
+        let timerFactory = TestSentryNSTimerFactory()
         
         let transactionName = "Some Transaction"
         let transactionOperation = "ui.load"
@@ -45,12 +45,12 @@ class SentryTracerTests: XCTestCase {
         
 #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         var displayLinkWrapper: TestDisplayLinkWrapper
-#endif
+#endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         
         init() {
             dispatchQueue.blockBeforeMainBlock = { false }
 
-            CurrentDate.setCurrentDateProvider(currentDateProvider)
+            SentryDependencyContainer.sharedInstance().dateProvider = currentDateProvider
             appStart = currentDateProvider.date()
             appStartEnd = appStart.addingTimeInterval(appStartDuration)
             
@@ -64,12 +64,13 @@ class SentryTracerTests: XCTestCase {
 #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
             displayLinkWrapper = TestDisplayLinkWrapper()
             
-            SentryFramesTracker.sharedInstance().setDisplayLinkWrapper(displayLinkWrapper)
-            SentryFramesTracker.sharedInstance().start()
+            SentryDependencyContainer.sharedInstance().framesTracker.setDisplayLinkWrapper(displayLinkWrapper)
+            SentryDependencyContainer.sharedInstance().framesTracker.start()
             displayLinkWrapper.call()
-#endif
+#endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         }
-        
+
+#if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         func getAppStartMeasurement(type: SentryAppStartType, preWarmed: Bool = false) -> SentryAppStartMeasurement {
             let runtimeInitDuration = 0.05
             let runtimeInit = appStart.addingTimeInterval(runtimeInitDuration)
@@ -83,6 +84,7 @@ class SentryTracerTests: XCTestCase {
 
             return SentryAppStartMeasurement(type: type, isPreWarmed: preWarmed, appStartTimestamp: appStart, duration: appStartDuration, runtimeInitTimestamp: runtimeInit, moduleInitializationTimestamp: main, didFinishLaunchingTimestamp: didFinishLaunching)
         }
+        #endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         
         func getSut(waitForChildren: Bool = true) -> SentryTracer {
             let tracer = hub.startTransaction(
@@ -91,7 +93,7 @@ class SentryTracerTests: XCTestCase {
                 customSamplingContext: [:],
                 configuration: SentryTracerConfiguration(block: {
                     $0.waitForChildren = waitForChildren
-                    $0.timerWrapper = self.timerWrapper
+                    $0.timerFactory = self.timerFactory
                 }))
             return tracer
         }
@@ -165,7 +167,7 @@ class SentryTracerTests: XCTestCase {
 
         child3.finish()
 
-        fixture.timerWrapper.fire()
+        fixture.timerFactory.fire()
 
         assertOneTransactionCaptured(sut)
 
@@ -197,7 +199,7 @@ class SentryTracerTests: XCTestCase {
 
         child3.finish()
 
-        fixture.timerWrapper.fire()
+        fixture.timerFactory.fire()
 
         XCTAssertEqual(sut.status, .undefined)
         XCTAssertEqual(child1.status, .undefined)
@@ -209,7 +211,7 @@ class SentryTracerTests: XCTestCase {
         let sut = fixture.getSut()
         sut.finish()
 
-        XCTAssertFalse(fixture.timerWrapper.overrides.timer.isValid)
+        XCTAssertFalse(fixture.timerFactory.overrides.timer.isValid)
     }
     
     func testDeadlineTimer_MultipleSpansFinishedInParallel() {
@@ -224,7 +226,7 @@ class SentryTracerTests: XCTestCase {
     func testFinish_CheckDefaultStatus() {
         let sut = fixture.getSut()
         sut.finish()
-        fixture.timerWrapper.fire()
+        fixture.timerFactory.fire()
         XCTAssertEqual(sut.status, .ok)
     }
     
@@ -316,7 +318,8 @@ class SentryTracerTests: XCTestCase {
         
         assertOneTransactionCaptured(sut)
     }
-    
+
+    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     func testFinish_WaitForAllChildren_StartTimeModified_NoTransactionCaptured() {
         let appStartMeasurement = fixture.getAppStartMeasurement(type: .cold)
         SentrySDK.setAppStartMeasurement(appStartMeasurement)
@@ -329,6 +332,7 @@ class SentryTracerTests: XCTestCase {
         
         assertTransactionNotCaptured(sut)
     }
+    #endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     
     func testFinish_IdleTimeout_ExceedsMaxDuration_NoTransactionCaptured() {
         let sut = fixture.getSut(idleTimeout: fixture.idleTimeout, dispatchQueueWrapper: fixture.dispatchQueue)
@@ -531,7 +535,8 @@ class SentryTracerTests: XCTestCase {
         
         XCTAssertTrue(sut.isFinished)
     }
-    
+
+    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     func testAddColdAppStartMeasurement_PutOnNextAutoUITransaction() {
         let appStartMeasurement = fixture.getAppStartMeasurement(type: .cold)
         SentrySDK.setAppStartMeasurement(appStartMeasurement)
@@ -543,6 +548,7 @@ class SentryTracerTests: XCTestCase {
         let transaction = fixture.hub.capturedEventsWithScopes.first!.event as! Transaction
         assertAppStartsSpanAdded(transaction: transaction, startType: "Cold Start", operation: fixture.appStartColdOperation, appStartMeasurement: appStartMeasurement)
     }
+    #endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
 
     func test_startChildWithDelegate() {
         let delegate = TracerDelegate()
@@ -590,6 +596,8 @@ class SentryTracerTests: XCTestCase {
         XCTAssertEqual(secondChild.parentSpanId, sut.spanId)
         XCTAssertEqual(secondChild.parentSpanId, child.parentSpanId)
     }
+
+    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
 
     func testAddPreWarmedAppStartMeasurement_PutOnNextAutoUITransaction() {
         let appStartMeasurement = fixture.getAppStartMeasurement(type: .cold, preWarmed: true)
@@ -749,6 +757,8 @@ class SentryTracerTests: XCTestCase {
         
         assertAppStartMeasurementNotPutOnTransaction()
     }
+
+#endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     
     func testMeasurementOnChildSpan_SetTwice_OverwritesMeasurement() {
         let name = "something"
@@ -775,7 +785,6 @@ class SentryTracerTests: XCTestCase {
     }
 
     func testFinish_WithUnfinishedChildren() {
-        CurrentDate.setCurrentDateProvider(DefaultCurrentDateProvider.sharedInstance())
         let sut = fixture.getSut(waitForChildren: false)
         let child1 = sut.startChild(operation: fixture.transactionOperation)
         let child2 = sut.startChild(operation: fixture.transactionOperation)
@@ -786,6 +795,8 @@ class SentryTracerTests: XCTestCase {
         //are equal we need to make sure that SentryTracer is not changing
         //the timestamp value of proper finished spans.
         Thread.sleep(forTimeInterval: 0.1)
+
+        fixture.currentDateProvider.setDate(date: SentryDependencyContainer.sharedInstance().dateProvider.date().addingTimeInterval(0.1))
         
         sut.finish()
         
@@ -874,7 +885,9 @@ class SentryTracerTests: XCTestCase {
         let spans = try getSerializedTransaction()["spans"]! as! [[String: Any]]
         XCTAssertEqual(spans.count, children * (grandchildren + 1) + 1)
     }
-    
+
+    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+
     func testConcurrentTransactions_OnlyOneGetsMeasurement() {
         SentrySDK.setAppStartMeasurement(fixture.getAppStartMeasurement(type: .warm))
         
@@ -903,6 +916,8 @@ class SentryTracerTests: XCTestCase {
         
         XCTAssertEqual(1, transactionsWithAppStartMeasurement.count)
     }
+
+    #endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     
     func testAddingSpansOnDifferentThread_WhileFinishing_DoesNotCrash() throws {
         let sut = fixture.getSut(waitForChildren: false)
@@ -985,7 +1000,7 @@ class SentryTracerTests: XCTestCase {
         
         let sut = fixture.getSut()
         
-        SentryFramesTracker.sharedInstance().resetFrames()
+        SentryDependencyContainer.sharedInstance().framesTracker.resetFrames()
         
         sut.finish()
         
@@ -1029,7 +1044,8 @@ class SentryTracerTests: XCTestCase {
         XCTAssertTrue(tracer.isFinished)
         XCTAssertEqual(1, fixture.hub.capturedEventsWithScopes.count)
     }
-    
+
+    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     private func assertAppStartsSpanAdded(transaction: Transaction, startType: String, operation: String, appStartMeasurement: SentryAppStartMeasurement) {
         let spans: [SentrySpan]? = Dynamic(transaction).spans
         XCTAssertEqual(5, spans?.count)
@@ -1108,6 +1124,8 @@ class SentryTracerTests: XCTestCase {
         let spans = serializedTransaction["spans"]! as! [[String: Any]]
         XCTAssertEqual(0, spans.count)
     }
+
+#endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     
     private func assertNoMeasurementsAdded() {
         XCTAssertEqual(1, fixture.hub.capturedEventsWithScopes.count)
