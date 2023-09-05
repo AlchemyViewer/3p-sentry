@@ -1,6 +1,5 @@
 #import "SentryAutoBreadcrumbTrackingIntegration.h"
 #import "SentryBreadcrumbTracker.h"
-#import "SentryDefaultCurrentDateProvider.h"
 #import "SentryDependencyContainer.h"
 #import "SentryFileManager.h"
 #import "SentryLog.h"
@@ -27,13 +26,10 @@ SentryAutoBreadcrumbTrackingIntegration ()
     }
 
     [self installWithOptions:options
-             breadcrumbTracker:[[SentryBreadcrumbTracker alloc]
-                                   initWithSwizzleWrapper:[SentryDependencyContainer sharedInstance]
-                                                              .swizzleWrapper]
+             breadcrumbTracker:[[SentryBreadcrumbTracker alloc] init]
         systemEventBreadcrumbs:
             [[SentrySystemEventBreadcrumbs alloc]
                          initWithFileManager:[SentryDependencyContainer sharedInstance].fileManager
-                      andCurrentDateProvider:[SentryDefaultCurrentDateProvider sharedInstance]
                 andNotificationCenterWrapper:[SentryDependencyContainer sharedInstance]
                                                  .notificationCenterWrapper]];
 

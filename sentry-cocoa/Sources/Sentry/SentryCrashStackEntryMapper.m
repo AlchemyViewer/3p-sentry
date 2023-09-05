@@ -1,4 +1,6 @@
 #import "SentryCrashStackEntryMapper.h"
+#import "SentryBinaryImageCache.h"
+#import "SentryDependencyContainer.h"
 #import "SentryFormatter.h"
 #import "SentryFrame.h"
 #import "SentryInAppLogic.h"
@@ -31,18 +33,29 @@ SentryCrashStackEntryMapper ()
 
     frame.instructionAddress = sentry_formatHexAddressUInt64(stackEntry.address);
 
-    frame.imageAddress = sentry_formatHexAddressUInt64(stackEntry.imageAddress);
-
     if (stackEntry.symbolName != NULL) {
         frame.function = [NSString stringWithCString:stackEntry.symbolName
                                             encoding:NSUTF8StringEncoding];
     }
 
-    if (stackEntry.imageName != NULL) {
-        NSString *imageName = [NSString stringWithCString:stackEntry.imageName
-                                                 encoding:NSUTF8StringEncoding];
-        frame.package = imageName;
-        frame.inApp = @([self.inAppLogic isInApp:imageName]);
+    // If there is no symbolication, because debug was disabled
+    // we get image from the cache.
+    if (stackEntry.imageAddress == 0 && stackEntry.imageName == NULL) {
+        SentryBinaryImageInfo *info = [SentryDependencyContainer.sharedInstance.binaryImageCache
+            imageByAddress:stackEntry.address];
+
+        frame.imageAddress = sentry_formatHexAddressUInt64(info.address);
+        frame.package = info.name;
+        frame.inApp = @([self.inAppLogic isInApp:info.name]);
+    } else {
+        frame.imageAddress = sentry_formatHexAddressUInt64(stackEntry.imageAddress);
+
+        if (stackEntry.imageName != NULL) {
+            NSString *imageName = [NSString stringWithCString:stackEntry.imageName
+                                                     encoding:NSUTF8StringEncoding];
+            frame.package = imageName;
+            frame.inApp = @([self.inAppLogic isInApp:imageName]);
+        }
     }
 
     return frame;

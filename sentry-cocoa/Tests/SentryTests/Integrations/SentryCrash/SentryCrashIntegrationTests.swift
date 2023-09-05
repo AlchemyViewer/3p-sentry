@@ -21,7 +21,7 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
             options.dsn = SentryCrashIntegrationTests.dsnAsString
             options.releaseName = TestData.appState.releaseName
             
-            client = TestClient(options: options, fileManager: try! SentryFileManager(options: options, andCurrentDateProvider: CurrentDate.getProvider()!, dispatchQueueWrapper: dispatchQueueWrapper), deleteOldEnvelopeItems: false)
+            client = TestClient(options: options, fileManager: try! SentryFileManager(options: options, dispatchQueueWrapper: dispatchQueueWrapper), deleteOldEnvelopeItems: false)
             hub = TestHub(client: client, andScope: nil)
         }
         
@@ -51,7 +51,7 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
     
     override func setUp() {
         super.setUp()
-        CurrentDate.setCurrentDateProvider(TestCurrentDateProvider())
+        SentryDependencyContainer.sharedInstance().dateProvider = TestCurrentDateProvider()
         
         fixture.client.fileManager.deleteCurrentSession()
         fixture.client.fileManager.deleteCrashedSession()
@@ -176,37 +176,6 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
         XCTAssertNil(fileManager.readCrashedSession())
     }
 
-    func testBinaryImageCacheStartAndStop() {
-        let (sut, _) = givenSutWithGlobalHub()
-
-        sut.install(with: Options())
-
-        XCTAssertTrue(fixture.sentryCrash.binaryCacheStarted)
-
-        var imagesCounter = 0
-
-        sentrycrashbic_iterateOverImages({ _, context in
-            guard let counter = context?.assumingMemoryBound(to: Int.self) else {
-                return
-            }
-            counter.pointee += 1
-        }, &imagesCounter)
-        XCTAssertGreaterThan(imagesCounter, 0)
-
-        sut.uninstall()
-        imagesCounter = 0
-
-        sentrycrashbic_iterateOverImages({ _, context in
-            guard let counter = context?.assumingMemoryBound(to: Int.self) else {
-                return
-            }
-            counter.pointee += 1
-        }, &imagesCounter)
-
-        XCTAssertEqual(imagesCounter, 0)
-        XCTAssertTrue(fixture.sentryCrash.binaryCacheStopped)
-    }
-
     func testEndSessionAsCrashed_NoCurrentSession() {
         let (sut, _) = givenSutWithGlobalHub()
         
@@ -310,14 +279,14 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
     
     private func givenCrashedSession() -> SentrySession {
         let session = givenCurrentSession()
-        session.endCrashed(withTimestamp: CurrentDate.date().addingTimeInterval(5))
+        session.endCrashed(withTimestamp: SentryDependencyContainer.sharedInstance().dateProvider.date().addingTimeInterval(5))
         
         return session
     }
     
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     private func givenOOMAppState() {
-        let appState = SentryAppState(releaseName: TestData.appState.releaseName, osVersion: UIDevice.current.systemVersion, vendorId: UIDevice.current.identifierForVendor?.uuidString ?? "", isDebugging: false, systemBootTimestamp: CurrentDate.date())
+        let appState = SentryAppState(releaseName: TestData.appState.releaseName, osVersion: UIDevice.current.systemVersion, vendorId: UIDevice.current.identifierForVendor?.uuidString ?? "", isDebugging: false, systemBootTimestamp: SentryDependencyContainer.sharedInstance().dateProvider.date())
         appState.isActive = true
         fixture.client.fileManager.store(appState)
         fixture.client.fileManager.moveAppStateToPreviousAppState()
@@ -409,6 +378,6 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
     }
     
     private func advanceTime(bySeconds: TimeInterval) {
-        (CurrentDate.getProvider() as! TestCurrentDateProvider).setDate(date: CurrentDate.date().addingTimeInterval(bySeconds))
+        (SentryDependencyContainer.sharedInstance().dateProvider as! TestCurrentDateProvider).setDate(date: SentryDependencyContainer.sharedInstance().dateProvider.date().addingTimeInterval(bySeconds))
     }
 }

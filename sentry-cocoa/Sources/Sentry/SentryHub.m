@@ -2,17 +2,17 @@
 #import "SentryClient+Private.h"
 #import "SentryCrashWrapper.h"
 #import "SentryCurrentDateProvider.h"
-#import "SentryDefaultCurrentDateProvider.h"
 #import "SentryDependencyContainer.h"
 #import "SentryEnvelope.h"
 #import "SentryEnvelopeItemType.h"
 #import "SentryEvent+Private.h"
 #import "SentryFileManager.h"
 #import "SentryId.h"
+#import "SentryLevelMapper.h"
 #import "SentryLog.h"
-#import "SentryNSTimerWrapper.h"
+#import "SentryNSTimerFactory.h"
 #import "SentryPerformanceTracker.h"
-#import "SentryProfilesSampler.h"
+#import "SentryProfilingConditionals.h"
 #import "SentrySDK+Private.h"
 #import "SentrySamplingContext.h"
 #import "SentryScope+Private.h"
@@ -23,7 +23,14 @@
 #import "SentryTracesSampler.h"
 #import "SentryTransaction.h"
 #import "SentryTransactionContext+Private.h"
-#import "SentryUIViewControllerPerformanceTracker.h"
+
+#if SENTRY_HAS_UIKIT
+#    import "SentryUIViewControllerPerformanceTracker.h"
+#endif // SENTRY_HAS_UIKIT
+
+#if SENTRY_TARGET_PROFILING_SUPPORTED
+#    import "SentryProfilesSampler.h"
+#endif // SENTRY_TARGET_PROFILING_SUPPORTED"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -35,8 +42,9 @@ SentryHub ()
 @property (nullable, nonatomic, strong) SentryScope *scope;
 @property (nonatomic, strong) SentryCrashWrapper *crashWrapper;
 @property (nonatomic, strong) SentryTracesSampler *tracesSampler;
+#if SENTRY_TARGET_PROFILING_SUPPORTED
 @property (nonatomic, strong) SentryProfilesSampler *profilesSampler;
-@property (nonatomic, strong) id<SentryCurrentDateProvider> currentDateProvider;
+#endif // SENTRY_TARGET_PROFILING_SUPPORTED
 @property (nonatomic, strong) NSMutableArray<id<SentryIntegrationProtocol>> *installedIntegrations;
 @property (nonatomic, strong) NSMutableSet<NSString *> *installedIntegrationNames;
 @property (nonatomic) NSUInteger errorsBeforeSession;
@@ -65,8 +73,7 @@ SentryHub ()
         if (client.options.isProfilingEnabled) {
             _profilesSampler = [[SentryProfilesSampler alloc] initWithOptions:client.options];
         }
-#endif
-        _currentDateProvider = [SentryDefaultCurrentDateProvider sharedInstance];
+#endif // SENTRY_TARGET_PROFILING_SUPPORTED
     }
     return self;
 }
@@ -75,11 +82,9 @@ SentryHub ()
 - (instancetype)initWithClient:(nullable SentryClient *)client
                       andScope:(nullable SentryScope *)scope
                andCrashWrapper:(SentryCrashWrapper *)crashWrapper
-        andCurrentDateProvider:(id<SentryCurrentDateProvider>)currentDateProvider
 {
     self = [self initWithClient:client andScope:scope];
     _crashWrapper = crashWrapper;
-    _currentDateProvider = currentDateProvider;
 
     return self;
 }
@@ -113,13 +118,14 @@ SentryHub ()
         [self storeCurrentSession:_session];
         [self captureSession:_session];
     }
-    [lastSession endSessionExitedWithTimestamp:[self.currentDateProvider date]];
+    [lastSession
+        endSessionExitedWithTimestamp:[SentryDependencyContainer.sharedInstance.dateProvider date]];
     [self captureSession:lastSession];
 }
 
 - (void)endSession
 {
-    [self endSessionWithTimestamp:[self.currentDateProvider date]];
+    [self endSessionWithTimestamp:[SentryDependencyContainer.sharedInstance.dateProvider date]];
 }
 
 - (void)endSessionWithTimestamp:(NSDate *)timestamp
@@ -382,10 +388,12 @@ SentryHub ()
                                       withSampled:samplerDecision.decision];
     transactionContext.sampleRate = samplerDecision.sampleRate;
 
+#if SENTRY_TARGET_PROFILING_SUPPORTED
     SentryProfilesSamplerDecision *profilesSamplerDecision =
         [_profilesSampler sample:samplingContext tracesSamplerDecision:samplerDecision];
 
     configuration.profilesSamplerDecision = profilesSamplerDecision;
+#endif // SENTRY_TARGET_PROFILING_SUPPORTED"
 
     SentryTracer *tracer = [[SentryTracer alloc] initWithTransactionContext:transactionContext
                                                                         hub:self
@@ -590,46 +598,77 @@ SentryHub ()
 
 - (SentryEnvelope *)updateSessionState:(SentryEnvelope *)envelope
 {
-    if ([self envelopeContainsEventWithErrorOrHigher:envelope.items]) {
-        SentrySession *currentSession = [self incrementSessionErrors];
-
-        if (currentSession != nil) {
-            // Create a new envelope with the session update
-            NSMutableArray<SentryEnvelopeItem *> *itemsToSend =
-                [[NSMutableArray alloc] initWithArray:envelope.items];
-            [itemsToSend addObject:[[SentryEnvelopeItem alloc] initWithSession:currentSession]];
-
-            return [[SentryEnvelope alloc] initWithHeader:envelope.header items:itemsToSend];
+    BOOL handled = YES;
+    if ([self envelopeContainsEventWithErrorOrHigher:envelope.items wasHandled:&handled]) {
+        SentrySession *currentSession;
+        @synchronized(_sessionLock) {
+            currentSession = handled ? [self incrementSessionErrors] : [_session copy];
+            if (currentSession == nil) {
+                return envelope;
+            }
+            if (!handled) {
+                [currentSession
+                    endSessionCrashedWithTimestamp:[SentryDependencyContainer.sharedInstance
+                                                           .dateProvider date]];
+                // Setting _session to nil so startSession doesn't capture it again
+                _session = nil;
+                [self startSession];
+            }
         }
-    }
 
+        // Create a new envelope with the session update
+        NSMutableArray<SentryEnvelopeItem *> *itemsToSend =
+            [[NSMutableArray alloc] initWithArray:envelope.items];
+        [itemsToSend addObject:[[SentryEnvelopeItem alloc] initWithSession:currentSession]];
+        return [[SentryEnvelope alloc] initWithHeader:envelope.header items:itemsToSend];
+    }
     return envelope;
 }
 
 - (BOOL)envelopeContainsEventWithErrorOrHigher:(NSArray<SentryEnvelopeItem *> *)items
+                                    wasHandled:(BOOL *)handled;
 {
     for (SentryEnvelopeItem *item in items) {
         if ([item.header.type isEqualToString:SentryEnvelopeItemTypeEvent]) {
             // If there is no level the default is error
-            SentryLevel level = [SentrySerialization levelFromData:item.data];
+            NSDictionary *eventJson = [SentrySerialization deserializeEventEnvelopeItem:item.data];
+            if (eventJson == nil) {
+                return NO;
+            }
+
+            SentryLevel level = sentryLevelForString(eventJson[@"level"]);
             if (level >= kSentryLevelError) {
+                *handled = [self eventContainsUnhandledError:eventJson];
                 return YES;
             }
         }
     }
-
     return NO;
+}
+
+- (BOOL)eventContainsUnhandledError:(NSDictionary *)eventDictionary
+{
+    NSArray *exceptions = eventDictionary[@"exception"][@"values"];
+    for (NSDictionary *exception in exceptions) {
+        NSDictionary *mechanism = exception[@"mechanism"];
+        NSNumber *handled = mechanism[@"handled"];
+
+        if ([handled boolValue] == NO) {
+            return NO;
+        }
+    }
+    return YES;
 }
 
 - (void)reportFullyDisplayed
 {
 #if SENTRY_HAS_UIKIT
-    if (_client.options.enableTimeToFullDisplay) {
+    if (_client.options.enableTimeToFullDisplayTracing) {
         [SentryUIViewControllerPerformanceTracker.shared reportFullyDisplayed];
     } else {
         SENTRY_LOG_DEBUG(@"The options `enableTimeToFullDisplay` is disabled.");
     }
-#endif
+#endif // SENTRY_HAS_UIKIT
 }
 
 - (void)flush:(NSTimeInterval)timeout

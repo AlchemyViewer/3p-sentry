@@ -1,16 +1,19 @@
 #import "SentryFramesTracker.h"
-#import "SentryCompiler.h"
-#import "SentryCurrentDate.h"
-#import "SentryDisplayLinkWrapper.h"
-#import "SentryLog.h"
-#import "SentryProfiler.h"
-#import "SentryProfilingConditionals.h"
-#import "SentryTime.h"
-#import "SentryTracer.h"
-#import <SentryScreenFrames.h>
-#include <stdatomic.h>
 
 #if SENTRY_HAS_UIKIT
+
+#    import "SentryCompiler.h"
+#    import "SentryCurrentDateProvider.h"
+#    import "SentryDependencyContainer.h"
+#    import "SentryDisplayLinkWrapper.h"
+#    import "SentryLog.h"
+#    import "SentryProfiler.h"
+#    import "SentryProfilingConditionals.h"
+#    import "SentryTime.h"
+#    import "SentryTracer.h"
+#    import <SentryScreenFrames.h>
+#    include <stdatomic.h>
+
 #    import <UIKit/UIKit.h>
 
 #    if SENTRY_TARGET_PROFILING_SUPPORTED
@@ -50,18 +53,6 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
     unsigned int _frozenFrames;
 }
 
-+ (instancetype)sharedInstance
-{
-    static SentryFramesTracker *sharedInstance = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        sharedInstance =
-            [[self alloc] initWithDisplayLinkWrapper:[[SentryDisplayLinkWrapper alloc] init]];
-    });
-    return sharedInstance;
-}
-
-/** Internal constructor for testing */
 - (instancetype)initWithDisplayLinkWrapper:(SentryDisplayLinkWrapper *)displayLinkWrapper
 {
     if (self = [super init]) {
@@ -110,7 +101,8 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
 - (void)displayLinkCallback
 {
     CFTimeInterval thisFrameTimestamp = self.displayLinkWrapper.timestamp;
-    uint64_t thisFrameSystemTimestamp = SentryCurrentDate.systemTime;
+    uint64_t thisFrameSystemTimestamp
+        = SentryDependencyContainer.sharedInstance.dateProvider.systemTime;
 
     if (self.previousFrameTimestamp == SentryPreviousFrameInitialValue) {
         self.previousFrameTimestamp = thisFrameTimestamp;
@@ -135,7 +127,7 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
     }
 
 #    if SENTRY_TARGET_PROFILING_SUPPORTED
-    if ([SentryProfiler isRunning]) {
+    if ([SentryProfiler isCurrentlyProfiling]) {
         BOOL hasNoFrameRatesYet = self.frameRateTimestamps.count == 0;
         uint64_t previousFrameRate
             = self.frameRateTimestamps.lastObject[@"value"].unsignedLongLongValue;
@@ -191,10 +183,10 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
 #    if SENTRY_TARGET_PROFILING_SUPPORTED
 - (void)recordTimestamp:(uint64_t)timestamp value:(NSNumber *)value array:(NSMutableArray *)array
 {
-    BOOL shouldRecord = [SentryProfiler isRunning];
+    BOOL shouldRecord = [SentryProfiler isCurrentlyProfiling];
 #        if defined(TEST) || defined(TESTCI)
     shouldRecord = YES;
-#        endif
+#        endif // defined(TEST) || defined(TESTCI)
     if (shouldRecord) {
         [array addObject:@{ @"timestamp" : @(timestamp), @"value" : value }];
     }
@@ -240,4 +232,4 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
 
 @end
 
-#endif
+#endif // SENTRY_HAS_UIKIT

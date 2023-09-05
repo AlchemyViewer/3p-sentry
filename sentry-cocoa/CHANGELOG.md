@@ -1,5 +1,98 @@
 # Changelog
 
+## 8.11.0
+
+### Features
+
+- Distributed tracing without performance (#3196)
+- Report database backing store information for Core Data (#3231)
+- Add "data use" in privacy manifests (#3259)
+- Add required reason API (#3206)
+
+### Fixes
+
+- Report correct units (nanojoules) for profiling energy metrics (#3262)
+
+## 8.10.0
+
+### Features
+
+- Record energy usage estimates for profiling (#3217)
+
+### Fixes
+
+- Remove a noisy NSLog (#3227)
+- WatchOS build for Xcode 15 (#3204)
+
+## 8.9.6
+
+### Fixed
+
+- Fix CPU usage collection for upcoming visualization in profiling flamecharts (#3214)
+
+## 8.9.5
+
+### Hybrid SDK support
+
+- Allow profiling from hybrid SDKs (#3194)
+
+## 8.9.4
+
+### Fixes
+ 
+- Remove linker settings from Package.swift (#3188)
+- Free memory returned by backtrace_symbols() in debug builds ([#3202](https://github.com/getsentry/sentry-cocoa/pull/3202))
+
+## 8.9.3
+
+### Fixes
+
+- Reclaim memory used by profiler when transactions are discarded (#3154)
+- Crashed session not being reported as crashed (#3183)
+
+## 8.9.2
+
+## Important Note
+
+**Do not use this version** if you use Release Health. It introduces a bug where crashed Sessions would not be reported correctly. This has been fixed in [version `8.9.3`](https://github.com/getsentry/sentry-cocoa/releases/tag/8.9.3).
+
+### Improvements
+
+- Reduced macOS SDK footprint by 2% (#3157) with similar changes for tvOS and watchOS (#3158, #3159, #3161)
+
+### Fixes
+
+- Fix a crash in SentryCoreDataTracker for nil error params (#3152)
+
+## 8.9.1
+
+### Fixes
+
+- Fix potential unbounded memory growth when starting profiled transactions from non-main contexts (#3135)
+
+## 8.9.0
+
+### Features
+
+- Symbolicate locally only when debug is enabled (#3079)
+
+This change considerably speeds up retrieving stacktraces, which the SDK uses for captureMessage, captureError and also for reporting file IO or DB operation on the main thread.
+
+- Sanitize HTTP info from breadcrumbs, spans and events (#3094)
+
+### Breaking change
+
+- Renamed `enableTimeToFullDisplay` to `enableTimeToFullDisplayTracing` (#3106)
+    - This is an experimental feature and may change at any time without a major revision.
+
+## 8.9.0-beta.1
+
+### Features
+
+- Symbolicate locally only when debug is enabled (#3079)
+- Sanitize HTTP info from breadcrumbs, spans and events (#3094)
+
+
 ## 8.8.0
 
 ### Features
@@ -191,6 +284,8 @@ This release can cause crashes when Profiling is enabled (#2779). Please update 
 ### Improvements
 
 - Change debug image type to macho (#2701)
+
+This change might mark 3rd party library frames as in-app, which the SDK previously marked as system frames.
 
 ## 8.1.0
 

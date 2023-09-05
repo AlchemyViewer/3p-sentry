@@ -16,19 +16,20 @@ class SentryTimeToDisplayTrackerTest: XCTestCase {
 
         init() {
             framesTracker = SentryFramesTracker(displayLinkWrapper: displayLinkWrapper)
+            SentryDependencyContainer.sharedInstance().framesTracker = framesTracker
             framesTracker.start()
         }
 
         func getSut(for controller: UIViewController, waitForFullDisplay: Bool) -> SentryTimeToDisplayTracker {
-            return SentryTimeToDisplayTracker(for: controller, framesTracker: framesTracker, waitForFullDisplay: waitForFullDisplay)
+            return SentryTimeToDisplayTracker(for: controller, waitForFullDisplay: waitForFullDisplay)
         }
     }
 
-    private let fixture = Fixture()
+    private lazy var fixture = Fixture()
 
     override func setUp() {
         super.setUp()
-        CurrentDate.setCurrentDateProvider(fixture.dateProvider)
+        SentryDependencyContainer.sharedInstance().dateProvider = fixture.dateProvider
     }
 
     override func tearDown() {
@@ -275,4 +276,4 @@ class SentryTimeToDisplayTrackerTest: XCTestCase {
     }
 }
 
-#endif
+#endif // os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
