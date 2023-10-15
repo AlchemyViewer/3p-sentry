@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.6
+
+**Fixes**:
+
+- Use a more up-to-date version of `mini_chromium` as a `crashpad` dependency, which fixes a build error on some systems. ([#891](https://github.com/getsentry/sentry-native/pull/891), [crashpad#88](https://github.com/getsentry/crashpad/pull/88))
+
+**Internal**:
+
+- Updated `libunwindstack` to 2023-09-13. ([#884](https://github.com/getsentry/sentry-native/pull/884), [libunwindstack-ndk#8](https://github.com/getsentry/libunwindstack-ndk/pull/8))
+- Updated `crashpad` to 2023-09-28. ([#891](https://github.com/getsentry/sentry-native/pull/891), [crashpad#88](https://github.com/getsentry/crashpad/pull/88))
+- Updated `breakpad` to 2023-10-02. ([#892](https://github.com/getsentry/sentry-native/pull/892), [breakpad#38](https://github.com/getsentry/breakpad/pull/38))
+
+**Thank you**:
+
+Features, fixes and improvements in this release have been contributed by:
+
+- [@sapphonie](https://github.com/sapphonie)
+
 ## 0.6.5
 
 **Fixes**:

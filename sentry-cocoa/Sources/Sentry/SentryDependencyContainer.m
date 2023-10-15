@@ -4,9 +4,11 @@
 #import "SentryDispatchFactory.h"
 #import "SentryDispatchQueueWrapper.h"
 #import "SentryDisplayLinkWrapper.h"
+#import "SentryExtraContextProvider.h"
 #import "SentryNSProcessInfoWrapper.h"
 #import "SentryNSTimerFactory.h"
 #import "SentryRandom.h"
+#import "SentrySysctl.h"
 #import "SentrySystemWrapper.h"
 #import "SentryUIDeviceWrapper.h"
 #import <SentryAppStateManager.h>
@@ -33,6 +35,10 @@
 #    import "SentryUIDeviceWrapper.h"
 #endif // TARGET_OS_IOS
 
+#if !TARGET_OS_WATCH
+#    import "SentryReachability.h"
+#endif // !TARGET_OS_WATCH
+
 @implementation SentryDependencyContainer
 
 static SentryDependencyContainer *instance;
@@ -42,24 +48,31 @@ static NSObject *sentryDependencyContainerLock;
 {
     if (self == [SentryDependencyContainer class]) {
         sentryDependencyContainerLock = [[NSObject alloc] init];
+        instance = [[SentryDependencyContainer alloc] init];
     }
 }
 
 + (instancetype)sharedInstance
 {
-    @synchronized(sentryDependencyContainerLock) {
-        if (instance == nil) {
-            instance = [[self alloc] init];
-        }
-        return instance;
-    }
+    return instance;
 }
 
 + (void)reset
 {
-    @synchronized(sentryDependencyContainerLock) {
-        instance = nil;
+    instance = [[SentryDependencyContainer alloc] init];
+}
+
+- (instancetype)init
+{
+    if (self = [super init]) {
+        _dispatchQueueWrapper = [[SentryDispatchQueueWrapper alloc] init];
+        _random = [[SentryRandom alloc] init];
+        _threadWrapper = [[SentryThreadWrapper alloc] init];
+        _binaryImageCache = [[SentryBinaryImageCache alloc] init];
+        _debugImageProvider = [[SentryDebugImageProvider alloc] init];
+        _dateProvider = [[SentryCurrentDateProvider alloc] init];
     }
+    return self;
 }
 
 - (SentryFileManager *)fileManager
@@ -81,7 +94,6 @@ static NSObject *sentryDependencyContainerLock;
                 [[SentryAppStateManager alloc] initWithOptions:options
                                                   crashWrapper:self.crashWrapper
                                                    fileManager:self.fileManager
-                                                        sysctl:[[SentrySysctl alloc] init]
                                           dispatchQueueWrapper:self.dispatchQueueWrapper
                                      notificationCenterWrapper:self.notificationCenterWrapper];
         }
@@ -101,26 +113,28 @@ static NSObject *sentryDependencyContainerLock;
     return _crashWrapper;
 }
 
-- (SentryThreadWrapper *)threadWrapper
+- (SentrySysctl *)sysctlWrapper
 {
-    if (_threadWrapper == nil) {
+    if (_sysctlWrapper == nil) {
         @synchronized(sentryDependencyContainerLock) {
-            if (_threadWrapper == nil) {
-                _threadWrapper = [[SentryThreadWrapper alloc] init];
+            if (_sysctlWrapper == nil) {
+                _sysctlWrapper = [[SentrySysctl alloc] init];
             }
         }
     }
-    return _threadWrapper;
+    return _sysctlWrapper;
 }
 
-- (SentryDispatchQueueWrapper *)dispatchQueueWrapper
+- (SentryExtraContextProvider *)extraContextProvider
 {
-    @synchronized(sentryDependencyContainerLock) {
-        if (_dispatchQueueWrapper == nil) {
-            _dispatchQueueWrapper = [[SentryDispatchQueueWrapper alloc] init];
+    if (_extraContextProvider == nil) {
+        @synchronized(sentryDependencyContainerLock) {
+            if (_extraContextProvider == nil) {
+                _extraContextProvider = [[SentryExtraContextProvider alloc] init];
+            }
         }
-        return _dispatchQueueWrapper;
     }
+    return _extraContextProvider;
 }
 
 - (SentryNSNotificationCenterWrapper *)notificationCenterWrapper
@@ -131,30 +145,6 @@ static NSObject *sentryDependencyContainerLock;
         }
         return _notificationCenterWrapper;
     }
-}
-
-- (id<SentryRandom>)random
-{
-    if (_random == nil) {
-        @synchronized(sentryDependencyContainerLock) {
-            if (_random == nil) {
-                _random = [[SentryRandom alloc] init];
-            }
-        }
-    }
-    return _random;
-}
-
-- (SentryBinaryImageCache *)binaryImageCache
-{
-    if (_binaryImageCache == nil) {
-        @synchronized(sentryDependencyContainerLock) {
-            if (_binaryImageCache == nil) {
-                _binaryImageCache = [[SentryBinaryImageCache alloc] init];
-            }
-        }
-    }
-    return _binaryImageCache;
 }
 
 #if TARGET_OS_IOS
@@ -234,19 +224,6 @@ static NSObject *sentryDependencyContainerLock;
     return _swizzleWrapper;
 }
 
-- (SentryDebugImageProvider *)debugImageProvider
-{
-    if (_debugImageProvider == nil) {
-        @synchronized(sentryDependencyContainerLock) {
-            if (_debugImageProvider == nil) {
-                _debugImageProvider = [[SentryDebugImageProvider alloc] init];
-            }
-        }
-    }
-
-    return _debugImageProvider;
-}
-
 - (SentryANRTracker *)getANRTracker:(NSTimeInterval)timeout
 {
     if (_anrTracker == nil) {
@@ -312,18 +289,6 @@ static NSObject *sentryDependencyContainerLock;
     return _timerFactory;
 }
 
-- (SentryCurrentDateProvider *)dateProvider
-{
-    if (_dateProvider == nil) {
-        @synchronized(sentryDependencyContainerLock) {
-            if (_dateProvider == nil) {
-                _dateProvider = [[SentryCurrentDateProvider alloc] init];
-            }
-        }
-    }
-    return _dateProvider;
-}
-
 #if SENTRY_HAS_METRIC_KIT
 - (SentryMXManager *)metricKitManager
 {
@@ -342,5 +307,19 @@ static NSObject *sentryDependencyContainerLock;
 }
 
 #endif // SENTRY_HAS_METRIC_KIT
+
+#if !TARGET_OS_WATCH
+- (SentryReachability *)reachability
+{
+    if (_reachability == nil) {
+        @synchronized(sentryDependencyContainerLock) {
+            if (_reachability == nil) {
+                _reachability = [[SentryReachability alloc] init];
+            }
+        }
+    }
+    return _reachability;
+}
+#endif // !TARGET_OS_WATCH
 
 @end

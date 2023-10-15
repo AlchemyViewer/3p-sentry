@@ -39,7 +39,8 @@
 #include <string.h>
 
 #if defined(__APPLE__) && (__MAC_OS_X_VERSION_MAX_ALLOWED >= 130000 || \
-                           __IPHONE_OS_VERSION_MAX_ALLOWED >= 160000)
+                           __IPHONE_OS_VERSION_MAX_ALLOWED >= 160000 || \
+                           __TVOS_OS_VERSION_MAX_ALLOWED >= 160000)
 #include <mach-o/utils.h>
 #endif
 
@@ -97,8 +98,9 @@ ArchInfo GetLocalArchInfo(void) {
 
 std::optional<ArchInfo> GetArchInfoFromName(const char* arch_name) {
 #if (__MAC_OS_X_VERSION_MAX_ALLOWED >= 130000 || \
-     __IPHONE_OS_VERSION_MAX_ALLOWED >= 160000)
-  if (__builtin_available(macOS 13.0, iOS 16.0, *)) {
+     __IPHONE_OS_VERSION_MAX_ALLOWED >= 160000 || \
+     __TVOS_OS_VERSION_MAX_ALLOWED >= 160000)
+  if (__builtin_available(macOS 13.0, iOS 16.0, tvOS 16.0, *)) {
     cpu_type_t type;
     cpu_subtype_t subtype;
     if (macho_cpu_type_for_arch_name(arch_name, &type, &subtype)) {
@@ -124,8 +126,9 @@ std::optional<ArchInfo> GetArchInfoFromName(const char* arch_name) {
 
 const char* GetNameFromCPUType(cpu_type_t cpu_type, cpu_subtype_t cpu_subtype) {
 #if (__MAC_OS_X_VERSION_MAX_ALLOWED >= 130000 || \
-     __IPHONE_OS_VERSION_MAX_ALLOWED >= 160000)
-  if (__builtin_available(macOS 13.0, iOS 16.0, *)) {
+     __IPHONE_OS_VERSION_MAX_ALLOWED >= 160000 || \
+     __TVOS_OS_VERSION_MAX_ALLOWED >= 160000)
+  if (__builtin_available(macOS 13.0, iOS 16.0, tvOS 16.0, *)) {
     const char* name = macho_arch_name_for_cpu_type(cpu_type, cpu_subtype);
     if (name) {
       return name;

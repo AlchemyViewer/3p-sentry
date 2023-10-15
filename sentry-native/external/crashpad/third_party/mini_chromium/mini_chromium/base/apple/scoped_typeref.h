@@ -2,13 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef MINI_CHROMIUM_BASE_MAC_SCOPED_TYPEREF_H_
-#define MINI_CHROMIUM_BASE_MAC_SCOPED_TYPEREF_H_
+#ifndef MINI_CHROMIUM_BASE_APPLE_SCOPED_TYPEREF_H_
+#define MINI_CHROMIUM_BASE_APPLE_SCOPED_TYPEREF_H_
 
 #include "base/logging.h"
 #include "base/memory/scoped_policy.h"
 
 namespace base {
+namespace apple {
 
 template <typename T>
 struct ScopedTypeRefTraits;
@@ -80,6 +81,7 @@ class ScopedTypeRef {
   T object_;
 };
 
+}  // namespace apple
 }  // namespace base
 
-#endif  // MINI_CHROMIUM_BASE_MAC_SCOPED_TYPEREF_H_
+#endif  // MINI_CHROMIUM_BASE_APPLE_SCOPED_TYPEREF_H_
