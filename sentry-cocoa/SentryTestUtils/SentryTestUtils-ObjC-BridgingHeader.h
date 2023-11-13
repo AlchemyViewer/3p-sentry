@@ -1,5 +1,11 @@
 #import "SentryDefines.h"
 
+#if TARGET_OS_IOS || TARGET_OS_TV
+#    define SENTRY_UIKIT_AVAILABLE 1
+#else
+#    define SENTRY_UIKIT_AVAILABLE 0
+#endif
+
 #if SENTRY_HAS_UIKIT
 #    import "SentryAppStartTracker.h"
 #    import "SentryDisplayLinkWrapper.h"
@@ -36,6 +42,7 @@
 #import "SentryReachability.h"
 #import "SentrySDK+Private.h"
 #import "SentrySDK+Tests.h"
+#import "SentryScopeSyncC.h"
 #import "SentrySession.h"
 #import "SentrySwizzleWrapper.h"
 #import "SentrySystemWrapper.h"
