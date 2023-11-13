@@ -68,6 +68,9 @@
                   Identifier = "SentryProfilerSwiftTests/testConcurrentSpansWithTimeout()">
                </Test>
                <Test
+                  Identifier = "SentryReachabilityTest/testMultipleReachabilityObservers">
+               </Test>
+               <Test
                   Identifier = "SentrySDKIntegrationTestsBase">
                </Test>
                <Test
@@ -75,6 +78,9 @@
                </Test>
                <Test
                   Identifier = "SentrySubClassFinderTests/testActOnSubclassesOfViewController()">
+               </Test>
+               <Test
+                  Identifier = "SentryThreadInspectorTests/testStacktraceHasFrames_forEveryThread()">
                </Test>
             </SkippedTests>
          </TestableReference>

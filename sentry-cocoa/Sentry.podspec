@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "Sentry"
-  s.version      = "8.13.1"
+  s.version      = "8.15.2"
   s.summary      = "Sentry client for cocoa"
   s.homepage     = "https://github.com/getsentry/sentry-cocoa"
   s.license      = "mit"
@@ -12,6 +12,7 @@ Pod::Spec.new do |s|
   s.osx.deployment_target = "10.13"
   s.tvos.deployment_target = "11.0"
   s.watchos.deployment_target = "4.0"
+  s.visionos.deployment_target = "1.0"
   s.module_name  = "Sentry"
   s.requires_arc = true
   s.frameworks = 'Foundation'
@@ -19,14 +20,14 @@ Pod::Spec.new do |s|
   s.pod_target_xcconfig = {
       'GCC_ENABLE_CPP_EXCEPTIONS' => 'YES',
       'CLANG_CXX_LANGUAGE_STANDARD' => 'c++14',
-      'CLANG_CXX_LIBRARY' => 'libc++'
+      'CLANG_CXX_LIBRARY' => 'libc++',
   }
   s.watchos.pod_target_xcconfig = {
       'OTHER_LDFLAGS' => '$(inherited) -framework WatchKit'
   }
 
   s.default_subspecs = ['Core']
-  s.dependency "SentryPrivate", "8.13.1"
+  s.dependency "SentryPrivate", "8.15.2"
 
   s.subspec 'Core' do |sp|
       sp.source_files = "Sources/Sentry/**/*.{h,hpp,m,mm,c,cpp}",
