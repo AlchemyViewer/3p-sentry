@@ -16,11 +16,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>d296e508c2043bdbab186d3236157feda1cb868fd0ae35672ae76b074d9a16c7a3228a6971c24e615cb41dfce1f33ac46f2709b376f6932a8d79e8e6c2608d7f</string>
+              <string>f4830346310b7f9010cf7160c65dca4f671dffc2fd2bccace572ed8e00159f8efbf46b47036f3f0eccf6c8393709fcc4765c3627ffc3ae8f8dee1e77208b0054</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/89/packages/generic/curl/7.54.1.2219/curl-7.54.1-linux64-2219.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/89/packages/generic/curl/7.54.1.2279/curl-7.54.1-linux64-2279.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -30,11 +30,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>d73277ff73c1f8fc62ee776d98f24f9163ef96698a4bd66ca60bc7db6295bcf47a10d3a5c16a23a995a2643d5bb5dab9436851b7cc872610351ac7cd23b78cc4</string>
+              <string>b0d5d6efcac781646e4ae8786d7833d19b06ccd226d18da87ce08a1fa1b90fb44f262b4949ebae691d53c3c24fdba65d95f1496277d2d7f7f7d07582508c806e</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/89/packages/generic/curl/7.54.1.2219/curl-7.54.1-windows64-2219.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/89/packages/generic/curl/7.54.1.2279/curl-7.54.1-windows64-2279.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -44,11 +44,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>c05959f8a88df09e2389cfda2188eceb0f1ca538baf2db362d484ced5cbe695dd592af4d445a465f24c9c3b851c887f15825cea44c8b77fbec35bfb4ada2eb6d</string>
+              <string>443e7d28982e9d17fcddef5d7747f3125ddf9298e3b3b675b20400ec621536652bf23ed8fa1299b3b5c92561094da0330b803183287c4652b0d572667fbfb35b</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/89/packages/generic/curl/7.54.1.2219/curl-7.54.1-darwin64-2219.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/89/packages/generic/curl/7.54.1.2279/curl-7.54.1-darwin64-2279.tar.zst</string>
             </map>
             <key>name</key>
             <string>darwin64</string>
@@ -80,11 +80,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>b98d8c581f1e02c164b89e808d000d390b57d1b7c40dd5b4fd6b2fef4afaff831ae8b5b66c0d4357df0e278f10a837f9f55257567e741ff5d1393c21b27b80ff</string>
+              <string>89bf178b1f0829e7be3beb1cbaf0058398a3fe88c45927d60780d17770fe25679d0f8d20a4856d1aaab797221e61cdc18c5da18e009c35169ed9d823d78843c8</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/91/packages/generic/nghttp2/1.58.0.2217/nghttp2-1.58.0-linux64-2217.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/91/packages/generic/nghttp2/1.58.0.2278/nghttp2-1.58.0-linux64-2278.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -94,11 +94,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>765bf0979e3aff088f5950a5ff9c3c465c635cc1fb846347a266424d26c05a6907ab9abbfadcfcf3c02d2d60df6ae90375e1c18d964e977bf663bed90cced190</string>
+              <string>7e3436188eccbdeabb1b2f688f176a40ba084bc8553e3e4d8063ab841ebe0d1323bb71b4b6dcd2086c5a20aec67beb20b2854280f8a65049f80176110b403a0c</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/91/packages/generic/nghttp2/1.58.0.2217/nghttp2-1.58.0-windows64-2217.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/91/packages/generic/nghttp2/1.58.0.2278/nghttp2-1.58.0-windows64-2278.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -108,11 +108,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>cfcda47204fc9b46d0249114cff4488c420832d6d5ce7e11e089cb57506accbd4dd9c127c4b97db908dcc8ac8fe46920a415f52b82b73a27c85153a5a5e06f30</string>
+              <string>386293448cd6074513d8d05d7412c5a7979457da094f7fb6004a5872d2867115a9b25f33bdcb734ef94ea7e417d01cddfc2a8a52c46f599d18d3b53b38b97ebf</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/91/packages/generic/nghttp2/1.58.0.2217/nghttp2-1.58.0-darwin64-2217.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/91/packages/generic/nghttp2/1.58.0.2278/nghttp2-1.58.0-darwin64-2278.tar.zst</string>
             </map>
             <key>name</key>
             <string>darwin64</string>
@@ -145,11 +145,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>48706f01da165ce21802169c1dcef146e2f31a722bcd88b112f71e0d4a344c3a85e2b139439861d247dce4359b43eb17d26005bf36cb466f85357f37e69ea8f8</string>
+              <string>d656d93e9861015e2436a5830aa7fa4098b72c67bbc3534650d73fd202d1d7ff5a8fd53d10346a0331d0595f0df9f725960fa9921f71b26ea3a50b7604a07ebc</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/90/packages/generic/openssl/3.1.4.2216/openssl-3.1.4-linux64-2216.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/90/packages/generic/openssl/1.1.1w.2266/openssl-1.1.1w-linux64-2266.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -159,11 +159,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>a2b6fcb9b421591a33ec0198a2dd55f996addcc9bfa93e4ce8421ce63699c5164c7fad8d393d25bb20cf337f3d3c954415390f9ade9a47067f9dbc311dc9929e</string>
+              <string>0a5f8c2246c68beea10132ad50c958cb4a7d3ba7cad3dd6642914a5feca06b95e55871ca8a42a4eb1d79dbf11a8c3497924c86fbf7d2bddf6488f9e2764e9dbd</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/90/packages/generic/openssl/3.1.4.2216/openssl-3.1.4-windows64-2216.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/90/packages/generic/openssl/1.1.1w.2266/openssl-1.1.1w-windows64-2266.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -173,11 +173,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>6bfe796b857f7f3e1a2a9dd90b53fca68b1180aabc665dbce983bee2bd536c0170ee3ebeff28db321677bf4384c49a4a947f3b72cc1329889af7e6abd46f7d26</string>
+              <string>9f5fc9dfcca1215a1341ed314e45e3d6b49e6fe5c61ea0ac22b1bec7f5b2f7918fd48627f903afbca9f5fb5b5273854584426ab737259cb93734ac49be6a1b41</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/90/packages/generic/openssl/3.1.4.2216/openssl-3.1.4-darwin64-2216.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/90/packages/generic/openssl/1.1.1w.2266/openssl-1.1.1w-darwin64-2266.tar.zst</string>
             </map>
             <key>name</key>
             <string>darwin64</string>
@@ -190,7 +190,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <key>copyright</key>
         <string>Copyright (c) 1998-2023 The OpenSSL Project.  All rights reserved; Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)</string>
         <key>version</key>
-        <string>3.1.4</string>
+        <string>1.1.1w</string>
         <key>name</key>
         <string>openssl</string>
         <key>canonical_repo</key>
@@ -207,11 +207,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>2be01859d6e77e2f65994d9f9afeac3725a07411b3066b1e96363fcdeb5c62e5918957c434300bdebfd72a126fc70205297044338086745f413d64074a971203</string>
+              <string>a465a8c3ced3f0264dd166272c3e5ef8f24d0023acea2e0c6260d1ce4d68c86082aad08ca6c45e1d78badd26d1e20cbac5b93dca86003c09a35dbcb206cf8d8e</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/148/packages/generic/zlib-ng/2.1.4.2215/zlib_ng-2.1.4-linux64-2215.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/148/packages/generic/zlib-ng/2.1.5.2263/zlib_ng-2.1.5-linux64-2263.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -221,11 +221,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>cd2fcd70c33603d1404e44f64770bb413726a8467c5a3bd6d7bc5a4b1bbe7c4840d2c522d5cfba1b32c504b71e8e470550fb23371658c7a1d3c58bb238c75203</string>
+              <string>8237606ba341ad7144bb07e52de830a392e26f066aeb6637de718a84c2db270d81bd73eac83b070ffec25e1893618705549db9c0bcdff9c98a03d6ef03774ed1</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/148/packages/generic/zlib-ng/2.1.4.2215/zlib_ng-2.1.4-windows64-2215.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/148/packages/generic/zlib-ng/2.1.5.2263/zlib_ng-2.1.5-windows64-2263.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -235,11 +235,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>95f787bf2b4209a17a87babf4dbe92dbcfe3a79dfa390216b357b8da3a61dc4c3e78ace116ccaebcae245cf7136e4838481a44d4a5d29d44dba28ac9a2d5618f</string>
+              <string>001f0029adcf36ab81e99fdc7ccdf4c469f587ac67a18a0d7e6052419676112b4bf8e73fd0ab461836d861b94ff8103f3fe5d324e6b4267ed0eb81dce2605f31</string>
               <key>hash_algorithm</key>
               <string>blake2b</string>
               <key>url</key>
-              <string>https://git.alchemyviewer.org/api/v4/projects/148/packages/generic/zlib-ng/2.1.4.2215/zlib_ng-2.1.4-darwin64-2215.tar.zst</string>
+              <string>https://git.alchemyviewer.org/api/v4/projects/148/packages/generic/zlib-ng/2.1.5.2263/zlib_ng-2.1.5-darwin64-2263.tar.zst</string>
             </map>
             <key>name</key>
             <string>darwin64</string>
@@ -252,7 +252,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <key>copyright</key>
         <string>Copyright (C) 1995-2017 Jean-loup Gailly and Mark Adler</string>
         <key>version</key>
-        <string>2.1.4</string>
+        <string>2.1.5</string>
         <key>name</key>
         <string>zlib-ng</string>
         <key>canonical_repo</key>
