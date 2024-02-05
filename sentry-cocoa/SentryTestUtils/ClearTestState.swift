@@ -12,6 +12,10 @@ public func setTestDefaultLogLevel() {
 @objcMembers
 class TestCleanup: NSObject {
     static func clearTestState() {
+        // You must call clearTestState on the main thread. Calling it on a background thread
+        // could interfere with another currently running test, making the tests flaky.
+        assert(Thread.isMainThread, "You must call clearTestState on the main thread.")
+        
         SentrySDK.close()
         SentrySDK.setCurrentHub(nil)
         SentrySDK.crashedLastRunCalled = false
@@ -22,9 +26,6 @@ class TestCleanup: NSObject {
         setTestDefaultLogLevel()
 
         #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-        let framesTracker = SentryDependencyContainer.sharedInstance().framesTracker
-        framesTracker.stop()
-        framesTracker.resetFrames()
 
         setenv("ActivePrewarm", "0", 1)
         SentryAppStartTracker.load()

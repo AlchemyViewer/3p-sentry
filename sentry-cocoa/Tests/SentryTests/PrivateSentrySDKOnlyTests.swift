@@ -95,7 +95,7 @@ class PrivateSentrySDKOnlyTests: XCTestCase {
 #endif // SENTRY_HAS_UIKIT
 
     func testGetInstallationId() {
-        XCTAssertEqual(SentryInstallation.id(), PrivateSentrySDKOnly.installationID)
+        XCTAssertEqual(SentryInstallation.id(withCacheDirectoryPath: PrivateSentrySDKOnly.options.cacheDirectoryPath), PrivateSentrySDKOnly.installationID)
     }
 
     func testSendAppStartMeasurement() {
@@ -195,7 +195,7 @@ class PrivateSentrySDKOnlyTests: XCTestCase {
         let slow = 2
         let frozen = 1
         let normal = 100
-        displayLink.givenFrames(slow, frozen, normal)
+        displayLink.renderFrames(slow, frozen, normal)
 
         let currentFrames = PrivateSentrySDKOnly.currentScreenFrames
         XCTAssertEqual(UInt(slow + frozen + normal), currentFrames.total)

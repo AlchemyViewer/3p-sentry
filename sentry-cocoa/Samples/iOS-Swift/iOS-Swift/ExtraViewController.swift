@@ -102,36 +102,7 @@ class ExtraViewController: UIViewController {
 
     @IBAction func anrFillingRunLoop(_ sender: UIButton) {
         highlightButton(sender)
-        let buttonTitle = self.anrFillingRunLoopButton.currentTitle
-        var i = 0
-
-        func sleep(timeout: Double) {
-            let group = DispatchGroup()
-            group.enter()
-            let queue = DispatchQueue(label: "delay", qos: .background, attributes: [])
-
-            queue.asyncAfter(deadline: .now() + timeout) {
-                group.leave()
-            }
-
-            group.wait()
-        }
-
-        dispatchQueue.async {
-            for _ in 0...30 {
-                i += Int.random(in: 0...10)
-                i -= 1
-
-                DispatchQueue.main.async {
-                    sleep(timeout: 0.1)
-                    self.anrFillingRunLoopButton.setTitle("Title \(i)", for: .normal)
-                }
-            }
-
-            DispatchQueue.main.sync {
-                self.anrFillingRunLoopButton.setTitle(buttonTitle, for: .normal)
-            }
-        }
+        triggerANRFillingRunLoop(button: self.anrFillingRunLoopButton)
     }
 
     @IBAction func start100Threads(_ sender: UIButton) {
@@ -193,6 +164,10 @@ class ExtraViewController: UIViewController {
     @IBAction func flush(_ sender: UIButton) {
         highlightButton(sender)
         SentrySDK.flush(timeout: 5)
+    }
+    
+    @IBAction func showTopVCInspector(_ sender: UIButton) {
+        TopViewControllerInspector.show()
     }
 
     @IBAction func close(_ sender: UIButton) {

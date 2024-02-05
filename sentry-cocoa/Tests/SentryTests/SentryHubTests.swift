@@ -1,3 +1,4 @@
+import Nimble
 import Sentry
 import SentryTestUtils
 import XCTest
@@ -39,7 +40,7 @@ class SentryHubTests: XCTestCase {
             
             SentryDependencyContainer.sharedInstance().dateProvider = currentDateProvider
             
-            crashedSession = SentrySession(releaseName: "1.0.0")
+            crashedSession = SentrySession(releaseName: "1.0.0", distinctId: "")
             crashedSession.endCrashed(withTimestamp: currentDateProvider.date())
             crashedSession.environment = options.environment
         }
@@ -606,9 +607,28 @@ class SentryHubTests: XCTestCase {
         
         assertNoCrashedSessionSent()
         
+        let environment = "test"
+        sut.configureScope { $0.setEnvironment(environment) }
+        sut.captureCrash(fixture.event)
+        assertEventSentWithSession(scopeEnvironment: environment)
+        
+        // Make sure further crash events are sent
+        sut.captureCrash(fixture.event)
+        assertCrashEventSent()
+    }
+    
+    func testCaptureCrashEvent_ManualSessionTracking_CrashedSessionExists() {
+        givenAutoSessionTrackingDisabled()
+        
+        givenCrashedSession()
+        
+        assertNoCrashedSessionSent()
+        
+        let environment = "test"
+        sut.configureScope { $0.setEnvironment(environment) }
         sut.captureCrash(fixture.event)
         
-        assertEventSentWithSession()
+        assertEventSentWithSession(scopeEnvironment: environment)
         
         // Make sure further crash events are sent
         sut.captureCrash(fixture.event)
@@ -634,15 +654,6 @@ class SentryHubTests: XCTestCase {
     
     func testCaptureCrashEvent_WithoutExistingSessionAndAutoSessionTrackingEnabled() {
         givenAutoSessionTrackingDisabled()
-        
-        sut.captureCrash(fixture.event)
-        
-        assertCrashEventSent()
-    }
-    
-    func testCaptureCrashEvent_SessionExistsButAutoSessionTrackingDisabled() {
-        givenAutoSessionTrackingDisabled()
-        givenCrashedSession()
         
         sut.captureCrash(fixture.event)
         
@@ -727,7 +738,7 @@ class SentryHubTests: XCTestCase {
     }
     
     func testCaptureEnvelope_WithSession() {
-        let envelope = SentryEnvelope(session: SentrySession(releaseName: ""))
+        let envelope = SentryEnvelope(session: SentrySession(releaseName: "", distinctId: ""))
         sut.capture(envelope)
         
         XCTAssertEqual(1, fixture.client.captureEnvelopeInvocations.count)
@@ -989,7 +1000,7 @@ class SentryHubTests: XCTestCase {
         XCTAssertTrue(arguments.first?.event.isCrashEvent ?? false)
     }
     
-    private func assertEventSentWithSession() {
+    private func assertEventSentWithSession(scopeEnvironment: String) {
         let arguments = fixture.client.captureCrashEventWithSessionInvocations
         XCTAssertEqual(1, arguments.count)
         
@@ -1001,7 +1012,8 @@ class SentryHubTests: XCTestCase {
         XCTAssertEqual(SentrySessionStatus.crashed, session?.status)
         XCTAssertEqual(fixture.options.environment, session?.environment)
         
-        XCTAssertEqual(fixture.scope, argument?.scope)
+        let event = argument?.scope.applyTo(event: fixture.event, maxBreadcrumbs: 10)
+        expect(event?.environment) == scopeEnvironment
     }
     
     private func assertSessionWithIncrementedErrorCountedAdded() {

@@ -80,7 +80,45 @@ class LaunchUITests: BaseUITest {
 
     func testCheckSlowAndFrozenFrames() {
         app.buttons["Extra"].tap()
-        checkSlowAndFrozenFrames()
+        
+        let (totalFrames, slowFrames, frozenFrames) = getFramesStats()
+       
+        let slowFramesPercentage = Double(slowFrames) / Double(totalFrames)
+        XCTAssertTrue(0.5 > slowFramesPercentage, "Too many slow frames.")
+        
+        let frozenFramesPercentage = Double(frozenFrames) / Double(totalFrames)
+        XCTAssertTrue(0.5 > frozenFramesPercentage, "Too many frozen frames.")
+    }
+    
+    func testCheckTotalFrames() {
+        app.buttons["Extra"].tap()
+        
+        let (startTotalFrames, _, _) = getFramesStats()
+        let startDate = Date()
+    
+        let dispatchQueue = DispatchQueue(label: "CheckSlowAndFrozenFrames")
+        let dispatchGroup = DispatchGroup()
+        dispatchGroup.enter()
+        
+        dispatchQueue.asyncAfter(deadline: .now() + 3.0) {
+            dispatchGroup.leave()
+        }
+        dispatchGroup.wait()
+        
+        let (endTotalFrames, _, _) = getFramesStats()
+        let endDate = Date()
+        
+        let secondsBetween = endDate.timeIntervalSince(startDate)
+  
+        // We don't calculate the min and max values based on the frame rate, as it could have changed while waiting for them to render.
+        // Instead, we pick the minimum value based on 60fps and the maximum value based on 120fps.
+        let expectedMinimumTotalFrames = (secondsBetween - 1.0) * 60
+        let expectedMaximumTotalFrames = (secondsBetween + 1.0) * 120
+        
+        let actualTotalFrames = Double(endTotalFrames - startTotalFrames)
+        
+        XCTAssertGreaterThanOrEqual(actualTotalFrames, expectedMinimumTotalFrames, "Actual frames:\(actualTotalFrames) should be greater than \(expectedMinimumTotalFrames)")
+        XCTAssertLessThanOrEqual(actualTotalFrames, expectedMaximumTotalFrames, "Actual frames:\(actualTotalFrames) should be less than \(expectedMaximumTotalFrames)")
     }
 
     /**
@@ -101,11 +139,8 @@ class LaunchUITests: BaseUITest {
         // this causes another transaction to be recorded which hits the codepath necessary for the ASAN to trip
         app.tabBars["Tab Bar"].buttons["Extra"].tap()
     }
-}
-
-private extension LaunchUITests {
     
-    func checkSlowAndFrozenFrames() {
+    private func getFramesStats() -> (Int, Int, Int) {
         let frameStatsLabel = app.staticTexts["framesStatsLabel"]
         frameStatsLabel.waitForExistence("Frame statistics message not found.")
         
@@ -113,16 +148,15 @@ private extension LaunchUITests {
         let frameStats = frameStatsAsStringArray.filter { $0 != "" }.map { Int($0) }
         
         XCTAssertEqual(3, frameStats.count)
-        guard let totalFrames = frameStats[0] else { XCTFail("No total frames found."); return }
-        guard let slowFrames = frameStats[1] else { XCTFail("No slow frames found."); return }
-        guard let frozenFrames = frameStats[1] else { XCTFail("No frozen frames found."); return }
-
-        let slowFramesPercentage = Double(slowFrames) / Double(totalFrames)
-        XCTAssertTrue(0.5 > slowFramesPercentage, "Too many slow frames.")
+        guard let totalFrames = frameStats[0] else { XCTFail("No total frames found."); return (0, 0, 0) }
+        guard let slowFrames = frameStats[1] else { XCTFail("No slow frames found."); return (0, 0, 0) }
+        guard let frozenFrames = frameStats[1] else { XCTFail("No frozen frames found."); return (0, 0, 0) }
         
-        let frozenFramesPercentage = Double(frozenFrames) / Double(totalFrames)
-        XCTAssertTrue(0.5 > frozenFramesPercentage, "Too many frozen frames.")
+        return (totalFrames, slowFrames, frozenFrames)
     }
+}
+
+private extension LaunchUITests {
     
     func assertApp() {
         let confirmation = app.staticTexts["ASSERT_MESSAGE"]
