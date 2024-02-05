@@ -137,7 +137,8 @@ case "$AUTOBUILD_PLATFORM" in
                     -DCMAKE_C_FLAGS="$RELEASE_CFLAGS" \
                     -DCMAKE_CXX_FLAGS="$RELEASE_CXXFLAGS" \
                     -DCMAKE_INSTALL_PREFIX="$stage/sentry" \
-                    -DSENTRY_BUILD_SHARED_LIBS=FALSE
+                    -DSENTRY_BUILD_SHARED_LIBS=FALSE \
+                    -DSENTRY_BACKEND="breakpad"
 
                 cmake --build . --config RelWithDebInfo --parallel $AUTOBUILD_CPU_COUNT
                 cmake --install . --config RelWithDebInfo
