@@ -26,6 +26,7 @@
 #import <SentrySwizzleWrapper.h>
 #import <SentrySysctl.h>
 #import <SentryThreadWrapper.h>
+#import <SentryTracer.h>
 
 #if SENTRY_HAS_UIKIT
 #    import "SentryFramesTracker.h"
@@ -62,11 +63,15 @@ static NSObject *sentryDependencyContainerLock;
 
 + (void)reset
 {
-#if !TARGET_OS_WATCH
     if (instance) {
+#if !TARGET_OS_WATCH
         [instance->_reachability removeAllObservers];
-    }
 #endif // !TARGET_OS_WATCH
+
+#if SENTRY_HAS_UIKIT
+        [instance->_framesTracker stop];
+#endif // SENTRY_HAS_UIKIT
+    }
 
     instance = [[SentryDependencyContainer alloc] init];
 }
@@ -127,7 +132,8 @@ static NSObject *sentryDependencyContainerLock;
     if (_crashReporter == nil) {
         @synchronized(sentryDependencyContainerLock) {
             if (_crashReporter == nil) {
-                _crashReporter = [[SentryCrash alloc] init];
+                SentryOptions *options = [[[SentrySDK currentHub] getClient] options];
+                _crashReporter = [[SentryCrash alloc] initWithBasePath:options.cacheDirectoryPath];
             }
         }
     }
@@ -267,7 +273,10 @@ static NSObject *sentryDependencyContainerLock;
         @synchronized(sentryDependencyContainerLock) {
             if (_framesTracker == nil) {
                 _framesTracker = [[SentryFramesTracker alloc]
-                    initWithDisplayLinkWrapper:[[SentryDisplayLinkWrapper alloc] init]];
+                    initWithDisplayLinkWrapper:[[SentryDisplayLinkWrapper alloc] init]
+                                  dateProvider:self.dateProvider
+                          dispatchQueueWrapper:self.dispatchQueueWrapper
+                     keepDelayedFramesDuration:SENTRY_AUTO_TRANSACTION_MAX_DURATION];
             }
         }
     }

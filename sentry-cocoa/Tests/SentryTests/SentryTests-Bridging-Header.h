@@ -12,9 +12,11 @@
 #if SENTRY_HAS_UIKIT
 #    import "MockUIScene.h"
 #    import "SentryFramesTracker+TestInit.h"
+#    import "SentryUIApplication+Private.h"
 #    import "SentryUIApplication.h"
 #    import "SentryUIDeviceWrapper.h"
 #    import "SentryUIEventTracker.h"
+#    import "SentryUIEventTrackerTransactionMode.h"
 #    import "SentryUIEventTrackingIntegration.h"
 #    import "SentryUIViewControllerPerformanceTracker.h"
 #    import "SentryUIViewControllerSwizzling+Test.h"
@@ -120,6 +122,7 @@
 #import "SentryId.h"
 #import "SentryInAppLogic.h"
 #import "SentryInitializeForGettingSubclassesNotCalled.h"
+#import "SentryInstallation+Test.h"
 #import "SentryInstallation.h"
 #import "SentryInternalNotificationNames.h"
 #import "SentryLevelMapper.h"
@@ -162,6 +165,8 @@
 #import "SentryScreenshot.h"
 #import "SentryScreenshotIntegration.h"
 #import "SentrySdkInfo.h"
+#import "SentrySwiftAsyncIntegration.h"
+
 #import "SentrySerialization.h"
 #import "SentrySession+Private.h"
 #import "SentrySessionTracker.h"

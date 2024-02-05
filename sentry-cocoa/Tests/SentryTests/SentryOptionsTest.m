@@ -241,6 +241,24 @@
     XCTAssertEqual([@30 unsignedIntValue], options.maxCacheItems);
 }
 
+- (void)testCacheDirectoryPath
+{
+    SentryOptions *options = [self getValidOptions:@{ @"cacheDirectoryPath" : @"abc" }];
+    XCTAssertEqualObjects(options.cacheDirectoryPath, @"abc");
+
+    SentryOptions *options2 = [self getValidOptions:@{ @"cacheDirectoryPath" : @"" }];
+    XCTAssertEqualObjects(options2.cacheDirectoryPath, @"");
+
+    SentryOptions *options3 = [self getValidOptions:@{ @"cacheDirectoryPath" : @2 }];
+    XCTAssertEqualObjects(options3.cacheDirectoryPath, [self getDefaultCacheDirectoryPath]);
+}
+
+- (NSString *)getDefaultCacheDirectoryPath
+{
+    return NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES)
+        .firstObject;
+}
+
 - (void)testBeforeSend
 {
     SentryBeforeSendEventCallback callback = ^(SentryEvent *event) { return event; };
@@ -509,6 +527,7 @@
         @"maxBreadcrumbs" : [NSNull null],
         @"enableNetworkBreadcrumbs" : [NSNull null],
         @"maxCacheItems" : [NSNull null],
+        @"cacheDirectoryPath" : [NSNull null],
         @"beforeSend" : [NSNull null],
         @"beforeBreadcrumb" : [NSNull null],
         @"onCrashedLastRun" : [NSNull null],
@@ -560,6 +579,8 @@
     XCTAssertEqual(defaultMaxBreadcrumbs, options.maxBreadcrumbs);
     XCTAssertTrue(options.enableNetworkBreadcrumbs);
     XCTAssertEqual(30, options.maxCacheItems);
+
+    XCTAssertTrue([[self getDefaultCacheDirectoryPath] isEqualToString:options.cacheDirectoryPath]);
     XCTAssertNil(options.beforeSend);
     XCTAssertNil(options.beforeBreadcrumb);
     XCTAssertNil(options.onCrashedLastRun);
@@ -703,6 +724,11 @@
 - (void)testEnableAutoPerformanceTracing
 {
     [self testBooleanField:@"enableAutoPerformanceTracing"];
+}
+
+- (void)testEnablePerformanceV2
+{
+    [self testBooleanField:@"enablePerformanceV2" defaultValue:NO];
 }
 
 #if SENTRY_HAS_UIKIT

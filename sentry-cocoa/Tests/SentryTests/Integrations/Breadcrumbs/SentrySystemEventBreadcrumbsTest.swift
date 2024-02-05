@@ -1,3 +1,4 @@
+import Nimble
 @testable import Sentry
 import SentryTestUtils
 import XCTest
@@ -118,6 +119,16 @@ class SentrySystemEventBreadcrumbsTest: XCTestCase {
         NotificationCenter.default.post(Notification(name: UIDevice.batteryStateDidChangeNotification, object: currentDevice))
         
         assertBatteryBreadcrumb(charging: false, level: 100)
+    }
+    
+    func testBatteryUIDeviceNilNotification() {
+        let currentDevice = MyUIDevice()
+        
+        sut = fixture.getSut(currentDevice: currentDevice)
+        
+        postBatteryLevelNotification(uiDevice: nil)
+        
+        expect(self.fixture.delegate.addCrumbInvocations.count) == 0
     }
     
     private func assertBatteryBreadcrumb(charging: Bool, level: Float) {
@@ -251,6 +262,20 @@ class SentrySystemEventBreadcrumbsTest: XCTestCase {
             XCTAssertEqual(data["current_seconds_from_gmt"] as? Int64, 7_200)
         }
     }
+    
+    func testTimezoneChangeNotificationBreadcrumb_NoStoredTimezoneOffset() {
+        sut = fixture.getSut(currentDevice: nil)
+
+        fixture.currentDateProvider.timezoneOffsetValue = 7_200
+        fixture.fileManager.deleteTimezoneOffset()
+
+        sut.timezoneEventTriggered()
+
+        assertBreadcrumbAction(action: "TIMEZONE_CHANGE") { data in
+            expect(data["previous_seconds_from_gmt"]) == nil
+            expect(data["current_seconds_from_gmt"] as? Int64) == 7_200
+        }
+    }
 
     func testStopCallsSpecificRemoveObserverMethods() {
         sut = fixture.getSut(currentDevice: nil)
@@ -258,7 +283,7 @@ class SentrySystemEventBreadcrumbsTest: XCTestCase {
         XCTAssertEqual(fixture.notificationCenterWrapper.removeObserverWithNameInvocations.count, 7)
     }
     
-    private func postBatteryLevelNotification(uiDevice: UIDevice) {
+    private func postBatteryLevelNotification(uiDevice: UIDevice?) {
         Dynamic(sut).batteryStateChanged(Notification(name: UIDevice.batteryLevelDidChangeNotification, object: uiDevice))
     }
 

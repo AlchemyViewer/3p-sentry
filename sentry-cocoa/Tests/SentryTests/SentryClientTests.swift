@@ -40,7 +40,7 @@ class SentryClientTest: XCTestCase {
         let dispatchQueue = TestSentryDispatchQueueWrapper()
         
         init() {
-            session = SentrySession(releaseName: "release")
+            session = SentrySession(releaseName: "release", distinctId: "some-id")
             session.incrementErrors()
 
             message = SentryMessage(formatted: messageAsString)
@@ -79,6 +79,7 @@ class SentryClientTest: XCTestCase {
                 let options = try Options(dict: [
                     "dsn": SentryClientTest.dsn
                 ])
+                options.removeAllIntegrations()
                 configureOptions(options)
 
                 client = SentryClient(
@@ -277,6 +278,86 @@ class SentryClientTest: XCTestCase {
         eventId.assertIsEmpty()
     }
     
+#if os(iOS) || targetEnvironment(macCatalyst) || os(tvOS)
+    func testCaptureEventWithCurrentScreen() {
+        SentryDependencyContainer.sharedInstance().application = TestSentryUIApplication()
+        
+        let event = Event()
+        event.exceptions = [ Exception(value: "", type: "")]
+        
+        fixture.getSut().capture(event: event, scope: fixture.scope)
+        
+        try? assertLastSentEventWithAttachment { event in
+            let viewName = event.context?["app"]?["view_names"] as? [String]
+            XCTAssertEqual(viewName?.first, "ClientTestViewController")
+        }
+    }
+    
+    func testCaptureEventWithNoCurrentScreenMainIsLocked() {
+        SentryDependencyContainer.sharedInstance().application = TestSentryUIApplication()
+        
+        let event = Event()
+        event.exceptions = [ Exception(value: "", type: "")]
+        
+        let group = DispatchGroup()
+        group.enter()
+        DispatchQueue.global().async {
+            self.fixture.getSut().capture(event: event, scope: self.fixture.scope)
+            group.leave()
+        }
+        group.enter()
+        let _ = group.wait(timeout: .now() + 1)
+        
+        try? assertLastSentEventWithAttachment { event in
+            let viewName = event.context?["app"]?["view_names"] as? [String]
+            XCTAssertNil(viewName)
+        }
+    }
+    
+    func testCaptureTransactionWithScreen() {
+        SentryDependencyContainer.sharedInstance().application = TestSentryUIApplication()
+        let tracer = SentryTracer(transactionContext: TransactionContext(operation: "Operation"), hub: nil)
+        if let event = Dynamic(tracer).toTransaction() as Transaction? {
+            fixture.getSut().capture(event: event, scope: fixture.scope)
+            
+            try? assertLastSentEventWithAttachment { event in
+                let viewName = event.context?["app"]?["view_names"] as? [String]
+                XCTAssertEqual(viewName?.first, "ClientTestViewController")
+            }
+        } else {
+            XCTFail("Could not get transaction from tracer")
+        }
+    }
+    
+    func testCaptureTransactionWithChangeScreen() {
+        SentryDependencyContainer.sharedInstance().application = TestSentryUIApplication()
+        let tracer = SentryTracer(transactionContext: TransactionContext(operation: "Operation"), hub: nil)
+        if let event = Dynamic(tracer).toTransaction() as Transaction? {
+            event.viewNames = ["AnotherScreen"]
+            fixture.getSut().capture(event: event, scope: fixture.scope)
+            
+            try? assertLastSentEventWithAttachment { event in
+                let viewName = event.context?["app"]?["view_names"] as? [String]
+                XCTAssertEqual(viewName?.first, "AnotherScreen")
+            }
+        } else {
+            XCTFail("Could not get transaction from tracer")
+        }
+    }
+    
+    func testCaptureTransactionWithoutScreen() {
+        SentryDependencyContainer.sharedInstance().application = TestSentryUIApplication()
+        
+        let event = Transaction(trace: SentryTracer(context: SpanContext(operation: "test"), framesTracker: nil), children: [])
+        fixture.getSut().capture(event: event, scope: fixture.scope)
+        
+        try? assertLastSentEventWithAttachment { event in
+            let viewName = event.context?["app"]?["view_names"] as? [String]
+            XCTAssertNil(viewName)
+        }
+    }
+#endif
+    
     func test_AttachmentProcessor_CaptureEvent() {
         let sut = fixture.getSut()
         let event = Event()
@@ -336,7 +417,7 @@ class SentryClientTest: XCTestCase {
         
         sut.add(processor)
         sut.captureError(error, with: Scope()) {
-            return SentrySession(releaseName: "")
+            return SentrySession(releaseName: "", distinctId: "some-id")
         }
         
         let sentAttachments = fixture.transportAdapter.sendEventWithTraceStateInvocations.first?.attachments ?? []
@@ -884,14 +965,14 @@ class SentryClientTest: XCTestCase {
     }
 
     func testCaptureSession() {
-        let session = SentrySession(releaseName: "release")
+        let session = SentrySession(releaseName: "release", distinctId: "some-id")
         fixture.getSut().capture(session: session)
 
         assertLastSentEnvelopeIsASession()
     }
     
     func testCaptureSessionWithoutReleaseName() {
-        let session = SentrySession(releaseName: "")
+        let session = SentrySession(releaseName: "", distinctId: "some-id")
         
         fixture.getSut().capture(session: session)
         fixture.getSut().capture(exception, with: Scope()) {
@@ -1265,7 +1346,7 @@ class SentryClientTest: XCTestCase {
         fixture.getSut().capture(message: "any message")
         
         try assertLastSentEvent { actual in
-            XCTAssertEqual(SentryInstallation.id(), actual.user?.userId)
+            XCTAssertEqual(SentryInstallation.id(withCacheDirectoryPath: PrivateSentrySDKOnly.options.cacheDirectoryPath), actual.user?.userId)
         }
     }
     
@@ -1630,6 +1711,17 @@ class SentryClientTest: XCTestCase {
         }
     }
     
+#if os(iOS) || targetEnvironment(macCatalyst) || os(tvOS)
+    class TestSentryUIApplication: SentryUIApplication {
+        override func relevantViewControllers() -> [UIViewController] {
+            return [ClientTestViewController()]
+        }
+    }
+    
+    class ClientTestViewController: UIViewController {
+        
+    }
+#endif
 }
 
 enum SentryClientError: Error {

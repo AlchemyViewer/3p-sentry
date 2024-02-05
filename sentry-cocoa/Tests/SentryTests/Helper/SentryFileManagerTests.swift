@@ -1,3 +1,4 @@
+import Nimble
 import Sentry
 import SentryTestUtils
 import XCTest
@@ -14,7 +15,7 @@ class SentryFileManagerTests: XCTestCase {
         
         let options: Options
 
-        let session = SentrySession(releaseName: "1.0.0")
+        let session = SentrySession(releaseName: "1.0.0", distinctId: "some-id")
         let sessionEnvelope: SentryEnvelope
 
         let sessionUpdate: SentrySession
@@ -99,7 +100,7 @@ class SentryFileManagerTests: XCTestCase {
     
     func testInitDoesNotOverrideDirectories() {
         sut.store(TestConstants.envelope)
-        sut.storeCurrentSession(SentrySession(releaseName: "1.0.0"))
+        sut.storeCurrentSession(SentrySession(releaseName: "1.0.0", distinctId: "some-id"))
         sut.storeTimestampLast(inForeground: Date())
 
         _ = try! SentryFileManager(options: fixture.options, dispatchQueueWrapper: TestSentryDispatchQueueWrapper())
@@ -142,6 +143,69 @@ class SentryFileManagerTests: XCTestCase {
         sut.deleteOldEnvelopeItems()
 
         XCTAssertEqual(sut.getAllEnvelopes().count, 0)
+    }
+    
+    func testDeleteOldEnvelopes_LogsIgnoreDSStoreFiles() throws {
+        let logOutput = TestLogOutput()
+        SentryLog.setLogOutput(logOutput)
+        SentryLog.configure(true, diagnosticLevel: .debug)
+        
+        let dsStoreFile = "\(sut.basePath)/.DS_Store"
+        
+        let result = FileManager.default.createFile(atPath: dsStoreFile, contents: "some data".data(using: .utf8))
+        expect(result) == true
+        
+        sut.deleteOldEnvelopeItems()
+        
+        let logMessages = logOutput.loggedMessages.filter {
+            $0.contains("[Sentry] [debug]") &&
+            $0.contains("Ignoring .DS_Store file when building envelopes path at path: \(dsStoreFile)")
+        }
+        expect(logMessages.count) == 1
+        
+        try FileManager.default.removeItem(atPath: dsStoreFile)
+    }
+    
+    func testDeleteOldEnvelopes_LogsDebugForTextFiles() throws {
+        let logOutput = TestLogOutput()
+        SentryLog.setLogOutput(logOutput)
+        SentryLog.configure(true, diagnosticLevel: .debug)
+        
+        let sut = fixture.getSut()
+        
+        let textFilePath = "\(sut.basePath)/something.txt"
+        
+        let result = FileManager.default.createFile(atPath: textFilePath, contents: "some data".data(using: .utf8))
+        expect(result) == true
+        
+        sut.deleteOldEnvelopeItems()
+        
+        let logMessages = logOutput.loggedMessages.filter {
+            $0.contains("[Sentry] [debug]") &&
+            $0.contains("Ignoring non directory when deleting old envelopes at path: \(textFilePath)")
+        }
+        expect(logMessages.count) == 1
+        
+        try FileManager.default.removeItem(atPath: textFilePath)
+    }
+    
+    func testGetEnvelopesPath_ForNonExistentPath_LogsWarning() throws {
+        let logOutput = TestLogOutput()
+        SentryLog.setLogOutput(logOutput)
+        SentryLog.configure(true, diagnosticLevel: .debug)
+        
+        let sut = fixture.getSut()
+        
+        let nonExistentFile = "nonExistentFile.txt"
+        let nonExistentFileFullPath = "\(sut.basePath)/\(nonExistentFile)"
+        
+        expect(sut.getEnvelopesPath(nonExistentFile)) == nil
+        
+        let logMessages = logOutput.loggedMessages.filter {
+            $0.contains("[Sentry] [warning]") &&
+            $0.contains("Could not get attributes of item at path: \(nonExistentFileFullPath)")
+        }
+        expect(logMessages.count) == 1
     }
     
     func testDeleteOldEnvelopes_WithEmptyDSN() throws {
@@ -204,11 +268,6 @@ class SentryFileManagerTests: XCTestCase {
 
     func testCreateDirDoesNotThrow() throws {
         try SentryFileManager.createDirectory(atPath: "a")
-    }
-    
-    func testAllFilesInFolder() {
-        let files = sut.allFiles(inFolder: "x")
-        XCTAssertTrue(files.isEmpty)
     }
     
     func testDeleteFileNotExists() {
@@ -282,7 +341,7 @@ class SentryFileManagerTests: XCTestCase {
     func testMigrateSessionInit_SessionUpdateIsLast() {
         sut.store(fixture.sessionEnvelope)
         // just some other session
-        sut.store(SentryEnvelope(session: SentrySession(releaseName: "1.0.0")))
+        sut.store(SentryEnvelope(session: SentrySession(releaseName: "1.0.0", distinctId: "some-id")))
         for _ in 0...(fixture.maxCacheItems - 3) {
             sut.store(TestConstants.envelope)
         }
@@ -409,7 +468,7 @@ class SentryFileManagerTests: XCTestCase {
     }
 
     func testStoreAndReadCurrentSession() {
-        let expectedSession = SentrySession(releaseName: "1.0.0")
+        let expectedSession = SentrySession(releaseName: "1.0.0", distinctId: "some-id")
         sut.storeCurrentSession(expectedSession)
         let actualSession = sut.readCurrentSession()
         XCTAssertTrue(expectedSession.distinctId == actualSession?.distinctId)
@@ -417,21 +476,21 @@ class SentryFileManagerTests: XCTestCase {
     }
     
     func testStoreAndReadCrashedSession() {
-        let expectedSession = SentrySession(releaseName: "1.0.0")
+        let expectedSession = SentrySession(releaseName: "1.0.0", distinctId: "some-id")
         sut.storeCrashedSession(expectedSession)
         let actualSession = sut.readCrashedSession()
         XCTAssertTrue(expectedSession.distinctId == actualSession?.distinctId)
     }
 
     func testStoreDeleteCurrentSession() {
-        sut.storeCurrentSession(SentrySession(releaseName: "1.0.0"))
+        sut.storeCurrentSession(SentrySession(releaseName: "1.0.0", distinctId: "some-id"))
         sut.deleteCurrentSession()
         let actualSession = sut.readCurrentSession()
         XCTAssertNil(actualSession)
     }
     
     func testStoreDeleteCrashedSession() {
-        sut.storeCrashedSession(SentrySession(releaseName: "1.0.0"))
+        sut.storeCrashedSession(SentrySession(releaseName: "1.0.0", distinctId: "some-id"))
         sut.deleteCrashedSession()
         let actualSession = sut.readCrashedSession()
         XCTAssertNil(actualSession)
@@ -461,7 +520,7 @@ class SentryFileManagerTests: XCTestCase {
     func testDeleteAllFolders() {
         storeEvent()
         sut.store(TestConstants.envelope)
-        sut.storeCurrentSession(SentrySession(releaseName: "1.0.1"))
+        sut.storeCurrentSession(SentrySession(releaseName: "1.0.1", distinctId: "some-id"))
         
         sut.deleteAllFolders()
 
@@ -476,6 +535,22 @@ class SentryFileManagerTests: XCTestCase {
         sut.deleteAllEnvelopes()
 
         XCTAssertEqual(0, sut.getAllEnvelopes().count)
+    }
+    
+    func testGetAllEnvelopesWhenNoEnvelopesPath_LogsInfoMessage() {
+        let logOutput = TestLogOutput()
+        SentryLog.setLogOutput(logOutput)
+        SentryLog.configure(true, diagnosticLevel: .debug)
+        
+        sut.deleteAllFolders()
+        sut.getAllEnvelopes()
+        
+        let debugLogMessages = logOutput.loggedMessages.filter { $0.contains("[Sentry] [info]") && $0.contains("Returning empty files list, as folder doesn't exist at path:") }
+        expect(debugLogMessages.count) == 1
+        
+        let errorMessages = logOutput.loggedMessages.filter { $0.contains("[Sentry] [error]") }
+        
+        expect(errorMessages.count) == 0
     }
     
     func testReadStoreDeleteAppState() {
@@ -580,6 +655,13 @@ class SentryFileManagerTests: XCTestCase {
 
         sut.deleteTimezoneOffset()
         XCTAssertNotNil(sut.readTimezoneOffset())
+    }
+    
+    func testSentryPathFromOptionsCacheDirectoryPath() {
+        fixture.options.cacheDirectoryPath = "/var/tmp"
+        sut = fixture.getSut()
+        
+        XCTAssertTrue(sut.sentryPath.hasPrefix("/var/tmp/io.sentry"))
     }
 
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)

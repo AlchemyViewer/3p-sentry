@@ -1,5 +1,4 @@
 #import "SentryLog.h"
-#import "SentryReachability+Private.h"
 #import "SentryReachability.h"
 #import <XCTest/XCTest.h>
 
@@ -36,16 +35,20 @@
 
 - (void)setUp
 {
+    // Ignore the actual reachability callbacks, cause we call the callbacks manually.
+    // Otherwise, the actual reachability callbacks are called during later unrelated tests causing
+    // flakes.
+    SentrySetReachabilityIgnoreActualCallback(YES);
+
     self.reachability = [[SentryReachability alloc] init];
-    // Disable the reachability callbacks, cause we call the callbacks manually.
-    // Otherwise, the reachability callbacks are called during later unrelated tests causing flakes.
-    self.reachability.setReachabilityCallback = NO;
+    self.reachability.skipRegisteringActualCallbacks = YES;
 }
 
 - (void)tearDown
 {
     [self.reachability removeAllObservers];
     self.reachability = nil;
+    SentrySetReachabilityIgnoreActualCallback(NO);
 }
 
 - (void)testConnectivityRepresentations
@@ -76,10 +79,10 @@
     [self.reachability addObserver:observerA];
 
     NSLog(@"[Sentry] [TEST] throwaway reachability callback, setting to reachable");
-    SentryConnectivityCallback(self.reachability.sentry_reachability_ref,
-        kSCNetworkReachabilityFlagsReachable, nil); // ignored, as it's the first callback
+    SentryConnectivityCallback(
+        kSCNetworkReachabilityFlagsReachable); // ignored, as it's the first callback
     NSLog(@"[Sentry] [TEST] reachability callback set to unreachable");
-    SentryConnectivityCallback(self.reachability.sentry_reachability_ref, 0, nil);
+    SentryConnectivityCallback(0);
 
     NSLog(@"[Sentry] [TEST] creating observer B");
     TestSentryReachabilityObserver *observerB = [[TestSentryReachabilityObserver alloc] init];
@@ -87,17 +90,15 @@
     [self.reachability addObserver:observerB];
 
     NSLog(@"[Sentry] [TEST] reachability callback set back to reachable");
-    SentryConnectivityCallback(
-        self.reachability.sentry_reachability_ref, kSCNetworkReachabilityFlagsReachable, nil);
+    SentryConnectivityCallback(kSCNetworkReachabilityFlagsReachable);
     NSLog(@"[Sentry] [TEST] reachability callback set back to unreachable");
-    SentryConnectivityCallback(self.reachability.sentry_reachability_ref, 0, nil);
+    SentryConnectivityCallback(0);
 
     NSLog(@"[Sentry] [TEST] removing observer B as reachability observer");
     [self.reachability removeObserver:observerB];
 
     NSLog(@"[Sentry] [TEST] reachability callback set back to reachable");
-    SentryConnectivityCallback(
-        self.reachability.sentry_reachability_ref, kSCNetworkReachabilityFlagsReachable, nil);
+    SentryConnectivityCallback(kSCNetworkReachabilityFlagsReachable);
 
     XCTAssertEqual(5, observerA.connectivityChangedInvocations);
     XCTAssertEqual(2, observerB.connectivityChangedInvocations);
@@ -112,8 +113,7 @@
     [self.reachability addObserver:observer];
     [self.reachability removeObserver:observer];
 
-    SentryConnectivityCallback(
-        self.reachability.sentry_reachability_ref, kSCNetworkReachabilityFlagsReachable, nil);
+    SentryConnectivityCallback(kSCNetworkReachabilityFlagsReachable);
 
     XCTAssertEqual(0, observer.connectivityChangedInvocations);
 
@@ -126,8 +126,7 @@
     [self.reachability addObserver:observer];
     [self.reachability addObserver:observer];
 
-    SentryConnectivityCallback(
-        self.reachability.sentry_reachability_ref, kSCNetworkReachabilityFlagsReachable, nil);
+    SentryConnectivityCallback(kSCNetworkReachabilityFlagsReachable);
 
     XCTAssertEqual(1, observer.connectivityChangedInvocations);
 
@@ -139,15 +138,26 @@
     TestSentryReachabilityObserver *observer = [[TestSentryReachabilityObserver alloc] init];
     [self.reachability addObserver:observer];
 
-    SentryConnectivityCallback(
-        self.reachability.sentry_reachability_ref, kSCNetworkReachabilityFlagsReachable, nil);
-    SentryConnectivityCallback(
-        self.reachability.sentry_reachability_ref, kSCNetworkReachabilityFlagsReachable, nil);
-    SentryConnectivityCallback(
-        self.reachability.sentry_reachability_ref, kSCNetworkReachabilityFlagsReachable, nil);
+    SentryConnectivityCallback(kSCNetworkReachabilityFlagsReachable);
+    SentryConnectivityCallback(kSCNetworkReachabilityFlagsReachable);
+    SentryConnectivityCallback(kSCNetworkReachabilityFlagsReachable);
 
     XCTAssertEqual(1, observer.connectivityChangedInvocations);
 
+    [self.reachability removeObserver:observer];
+}
+
+/**
+ * We only want to make sure running the actual registering and unregistering callbacks doesn't
+ * crash.
+ */
+- (void)testRegisteringActualCallbacks
+{
+    self.reachability.skipRegisteringActualCallbacks = NO;
+
+    TestSentryReachabilityObserver *observer = [[TestSentryReachabilityObserver alloc] init];
+
+    [self.reachability addObserver:observer];
     [self.reachability removeObserver:observer];
 }
 
