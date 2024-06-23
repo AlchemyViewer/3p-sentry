@@ -16,13 +16,14 @@ class SentryTimeToDisplayTrackerTest: XCTestCase {
         var framesTracker: SentryFramesTracker
 
         init() {
-            framesTracker = SentryFramesTracker(displayLinkWrapper: displayLinkWrapper, dateProvider: dateProvider, dispatchQueueWrapper: SentryDispatchQueueWrapper(), keepDelayedFramesDuration: 0)
+            framesTracker = SentryFramesTracker(displayLinkWrapper: displayLinkWrapper, dateProvider: dateProvider, dispatchQueueWrapper: TestSentryDispatchQueueWrapper(),
+                                                notificationCenter: TestNSNotificationCenterWrapper(), keepDelayedFramesDuration: 0)
             SentryDependencyContainer.sharedInstance().framesTracker = framesTracker
             framesTracker.start()
         }
 
         func getSut(for controller: UIViewController, waitForFullDisplay: Bool) -> SentryTimeToDisplayTracker {
-            return SentryTimeToDisplayTracker(for: controller, waitForFullDisplay: waitForFullDisplay)
+            return SentryTimeToDisplayTracker(for: controller, waitForFullDisplay: waitForFullDisplay, dispatchQueueWrapper: SentryDispatchQueueWrapper())
         }
         
         func getTracer() throws -> SentryTracer {
@@ -202,6 +203,33 @@ class SentryTimeToDisplayTrackerTest: XCTestCase {
         
         expect(Dynamic(self.fixture.framesTracker).listeners.count) == 0
     }
+    
+    func testTracerFinishesBeforeReportInitialDisplay_FinishesInitialDisplaySpan() throws {
+        let sut = fixture.getSut(for: UIViewController(), waitForFullDisplay: false)
+
+        fixture.dateProvider.setDate(date: Date(timeIntervalSince1970: 7))
+        let tracer = try fixture.getTracer()
+
+        sut.start(for: tracer)
+        expect(tracer.children.count) == 1
+        expect(Dynamic(self.fixture.framesTracker).listeners.count) == 1
+
+        let ttidSpan = try XCTUnwrap(tracer.children.first, "Expected a TTID span")
+        expect(ttidSpan.startTimestamp) == fixture.dateProvider.date()
+
+        fixture.dateProvider.setDate(date: Date(timeIntervalSince1970: 9))
+        
+        tracer.finish()
+
+        expect(ttidSpan.timestamp) == fixture.dateProvider.date()
+        expect(ttidSpan.isFinished) == true
+        expect(ttidSpan.spanDescription) == "UIViewController initial display"
+        expect(ttidSpan.status) == .ok
+
+        assertMeasurement(tracer: tracer, name: "time_to_initial_display", duration: 2_000)
+
+        expect(Dynamic(self.fixture.framesTracker).listeners.count) == 0
+    }
 
     func testCheckInitialTime() throws {
         fixture.dateProvider.setDate(date: Date(timeIntervalSince1970: 9))
@@ -255,6 +283,18 @@ class SentryTimeToDisplayTrackerTest: XCTestCase {
         assertMeasurement(tracer: tracer, name: "time_to_full_display", duration: 1_000)
     }
     
+    func testReportFullyDisplayed_GetsDispatchedOnMainQueue() {
+        let dispatchQueueWrapper = TestSentryDispatchQueueWrapper()
+        
+        let sut = SentryTimeToDisplayTracker(for: UIViewController(), waitForFullDisplay: true, dispatchQueueWrapper: dispatchQueueWrapper)
+        
+        let invocationsBefore = dispatchQueueWrapper.blockOnMainInvocations.count
+        sut.reportFullyDisplayed()
+        
+        let expectedInvocations = invocationsBefore + 1
+        expect(dispatchQueueWrapper.blockOnMainInvocations.count).to(equal(expectedInvocations), description: "reportFullyDisplayed should be dispatched on the main queue. ")
+    }
+    
     func testNotWaitingForFullyDisplayed_AfterTracerTimesOut() throws {
         fixture.dateProvider.setDate(date: Date(timeIntervalSince1970: 9))
 
@@ -287,7 +327,7 @@ class SentryTimeToDisplayTrackerTest: XCTestCase {
     }
     
     func testTracerWithAppStartData_notWaitingForFullDisplay() throws {
-        let appStartMeasurement = TestData.getAppStartMeasurement(type: .cold, appStartTimestamp: Date(timeIntervalSince1970: 6))
+        let appStartMeasurement = TestData.getAppStartMeasurement(type: .cold, appStartTimestamp: Date(timeIntervalSince1970: 6), runtimeInitSystemTimestamp: 6_000_000_000)
         SentrySDK.setAppStartMeasurement(appStartMeasurement)
         
         fixture.dateProvider.setDate(date: Date(timeIntervalSince1970: 7))
@@ -320,7 +360,7 @@ class SentryTimeToDisplayTrackerTest: XCTestCase {
     }
     
     func testTracerWithAppStartData_waitingForFullDisplay() throws {
-        let appStartMeasurement = TestData.getAppStartMeasurement(type: .cold, appStartTimestamp: Date(timeIntervalSince1970: 6))
+        let appStartMeasurement = TestData.getAppStartMeasurement(type: .cold, appStartTimestamp: Date(timeIntervalSince1970: 6), runtimeInitSystemTimestamp: 6_000_000_000)
         SentrySDK.setAppStartMeasurement(appStartMeasurement)
         
         fixture.dateProvider.setDate(date: Date(timeIntervalSince1970: 7))

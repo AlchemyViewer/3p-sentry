@@ -26,6 +26,7 @@
 		7BFC8B0626D4D24B000D3504 /* LoremIpsum.txt in Resources */ = {isa = PBXBuildFile; fileRef = 7BFC8B0526D4D24B000D3504 /* LoremIpsum.txt */; };
 		844DA821282584C300E6B62E /* CoreDataViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8F57BC427BBD787000D09D4 /* CoreDataViewController.swift */; };
 		844DA822282584F700E6B62E /* SentryData.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = D845F35927BAD4CC00A4D7A2 /* SentryData.xcdatamodeld */; };
+		847670302BAA4AFA001A4E31 /* NSObject+SentryAppSetup.m in Sources */ = {isa = PBXBuildFile; fileRef = 8476702F2BAA4AFA001A4E31 /* NSObject+SentryAppSetup.m */; };
 		848A256B286E3351008A8858 /* Sentry.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 630853322440C44F00DDE4CE /* Sentry.framework */; };
 		848A256D286E3351008A8858 /* fatal-error-binary-images-message2.json in Resources */ = {isa = PBXBuildFile; fileRef = D83A30DF279F1F5C00372D0A /* fatal-error-binary-images-message2.json */; };
 		848A256F286E3351008A8858 /* Sentry.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 630853322440C44F00DDE4CE /* Sentry.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
@@ -41,6 +42,7 @@
 		84FB812A284001B800F3A94A /* SentryBenchmarking.mm in Sources */ = {isa = PBXBuildFile; fileRef = 84FB8129284001B800F3A94A /* SentryBenchmarking.mm */; };
 		84FB812B284001B800F3A94A /* SentryBenchmarking.mm in Sources */ = {isa = PBXBuildFile; fileRef = 84FB8129284001B800F3A94A /* SentryBenchmarking.mm */; };
 		8E8C57AF25EF16E6001CEEFA /* TraceTestViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E8C57AE25EF16E6001CEEFA /* TraceTestViewController.swift */; };
+		B70038852BB33E7700065A38 /* ReplaceContentViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70038842BB33E7700065A38 /* ReplaceContentViewController.swift */; };
 		D80D021329EE93630084393D /* ErrorsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D80D021229EE93630084393D /* ErrorsViewController.swift */; };
 		D80D021A29EE936F0084393D /* ExtraViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D80D021929EE936F0084393D /* ExtraViewController.swift */; };
 		D80D021B29EE9E3D0084393D /* ErrorsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D80D021229EE93630084393D /* ErrorsViewController.swift */; };
@@ -172,13 +174,6 @@
 			remoteGlobalIDString = D8199DAA29376E9B0074249E;
 			remoteInfo = SentrySwiftUI;
 		};
-		D81A3499291D0B2C005A27A9 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 6308532C2440C44F00DDE4CE /* Sentry.xcodeproj */;
-			proxyType = 2;
-			remoteGlobalIDString = D81A3488291D0AC0005A27A9;
-			remoteInfo = SentryPrivate;
-		};
 		D83A30CA279F075800372D0A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 6308532C2440C44F00DDE4CE /* Sentry.xcodeproj */;
@@ -296,11 +291,13 @@
 		7B4F33F7271EBD2500C8591E /* SwiftUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftUI.swift; sourceTree = "<group>"; };
 		7B4F33FA271EBE0C00C8591E /* SwiftUIViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftUIViewController.swift; sourceTree = "<group>"; };
 		7B5525B22938B5B5006A2932 /* DiskWriteException.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskWriteException.swift; sourceTree = "<group>"; };
-		7B64386826A6C544000D0F65 /* iOS-SwiftUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "iOS-SwiftUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		7B64386826A6C544000D0F65 /* iOS-Swift-UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "iOS-Swift-UITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7B64386A26A6C544000D0F65 /* LaunchUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchUITests.swift; sourceTree = "<group>"; };
 		7B64386C26A6C544000D0F65 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		7B79000329028C7300A7F467 /* MetricKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricKitManager.swift; sourceTree = "<group>"; };
 		7BFC8B0526D4D24B000D3504 /* LoremIpsum.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = LoremIpsum.txt; sourceTree = "<group>"; };
+		8476702E2BAA4AFA001A4E31 /* NSObject+SentryAppSetup.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NSObject+SentryAppSetup.h"; sourceTree = "<group>"; };
+		8476702F2BAA4AFA001A4E31 /* NSObject+SentryAppSetup.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NSObject+SentryAppSetup.m"; sourceTree = "<group>"; };
 		848A2573286E3351008A8858 /* PerformanceBenchmarks.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PerformanceBenchmarks.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		848A2578286E3490008A8858 /* PerformanceBenchmarks-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "PerformanceBenchmarks-Info.plist"; sourceTree = "<group>"; };
 		84A5D72529D2705000388BFA /* ProfilingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilingUITests.swift; sourceTree = "<group>"; };
@@ -318,6 +315,7 @@
 		84FB8129284001B800F3A94A /* SentryBenchmarking.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SentryBenchmarking.mm; sourceTree = "<group>"; };
 		84FB812C2840021B00F3A94A /* iOS-Swift-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "iOS-Swift-Bridging-Header.h"; sourceTree = "<group>"; };
 		8E8C57AE25EF16E6001CEEFA /* TraceTestViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceTestViewController.swift; sourceTree = "<group>"; };
+		B70038842BB33E7700065A38 /* ReplaceContentViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceContentViewController.swift; sourceTree = "<group>"; };
 		D80D021229EE93630084393D /* ErrorsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorsViewController.swift; sourceTree = "<group>"; };
 		D80D021929EE936F0084393D /* ExtraViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtraViewController.swift; sourceTree = "<group>"; };
 		D8269A39274C095E00BD5BD5 /* iOS13-Swift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "iOS13-Swift.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -420,7 +418,6 @@
 			children = (
 				630853322440C44F00DDE4CE /* Sentry.framework */,
 				630853342440C44F00DDE4CE /* SentryTests.xctest */,
-				D81A349A291D0B2C005A27A9 /* SentryPrivate.framework */,
 				D8105B5C297E792200299F03 /* SentrySwiftUI.framework */,
 				84B7FA5B29B2A86500AD93B1 /* SentryProfilerTests.xctest */,
 				84B7FA5D29B2A86500AD93B1 /* libSentryTestUtils.a */,
@@ -442,7 +439,7 @@
 				848A2576286E3490008A8858 /* PerformanceBenchmarks */,
 				6308532C2440C44F00DDE4CE /* Sentry.xcodeproj */,
 				637AFDA8243B02760034958B /* iOS-Swift */,
-				7B64386926A6C544000D0F65 /* iOS-SwiftUITests */,
+				7B64386926A6C544000D0F65 /* iOS-Swift-UITests */,
 				D840D521273A07F400CDF142 /* iOS-SwiftClip */,
 				D8269A3A274C095E00BD5BD5 /* iOS13-Swift */,
 				D85DAA4A274C244F004DF43C /* iOS13-SwiftTests */,
@@ -457,7 +454,7 @@
 			isa = PBXGroup;
 			children = (
 				637AFDA6243B02760034958B /* iOS-Swift.app */,
-				7B64386826A6C544000D0F65 /* iOS-SwiftUITests.xctest */,
+				7B64386826A6C544000D0F65 /* iOS-Swift-UITests.xctest */,
 				D840D520273A07F400CDF142 /* iOS-SwiftClip.app */,
 				D8269A39274C095E00BD5BD5 /* iOS13-Swift.app */,
 				D85DAA49274C244F004DF43C /* iOS13-SwiftTests.xctest */,
@@ -490,7 +487,7 @@
 			path = "iOS-Swift";
 			sourceTree = "<group>";
 		};
-		7B64386926A6C544000D0F65 /* iOS-SwiftUITests */ = {
+		7B64386926A6C544000D0F65 /* iOS-Swift-UITests */ = {
 			isa = PBXGroup;
 			children = (
 				D83A30DF279F1F5C00372D0A /* fatal-error-binary-images-message2.json */,
@@ -505,7 +502,7 @@
 				7B64386C26A6C544000D0F65 /* Info.plist */,
 				D8832B1B2AF5101300C522B0 /* TopViewControllerTests.swift */,
 			);
-			path = "iOS-SwiftUITests";
+			path = "iOS-Swift-UITests";
 			sourceTree = "<group>";
 		};
 		848A2576286E3490008A8858 /* PerformanceBenchmarks */ = {
@@ -523,6 +520,8 @@
 			isa = PBXGroup;
 			children = (
 				84AB90702A5001000054C99A /* ProfilingViewController.swift */,
+				8476702E2BAA4AFA001A4E31 /* NSObject+SentryAppSetup.h */,
+				8476702F2BAA4AFA001A4E31 /* NSObject+SentryAppSetup.m */,
 				84ACC4422A73CD0700932A18 /* ProfilingCPUWork.swift */,
 				84ACC43B2A73CB5900932A18 /* ProfilingNetworkScanner.swift */,
 			);
@@ -581,6 +580,7 @@
 				D8C33E1E29FBB1F70071B75A /* UIEventBreadcrumbsController.swift */,
 				D8F01DE92A1376B5008F4996 /* InfoForBreadcrumbController.swift */,
 				D8832B1D2AF52D0500C522B0 /* PageViewController.swift */,
+				B70038842BB33E7700065A38 /* ReplaceContentViewController.swift */,
 			);
 			path = ViewControllers;
 			sourceTree = "<group>";
@@ -647,9 +647,9 @@
 			productReference = 637AFDA6243B02760034958B /* iOS-Swift.app */;
 			productType = "com.apple.product-type.application";
 		};
-		7B64386726A6C544000D0F65 /* iOS-SwiftUITests */ = {
+		7B64386726A6C544000D0F65 /* iOS-Swift-UITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 7B64387226A6C544000D0F65 /* Build configuration list for PBXNativeTarget "iOS-SwiftUITests" */;
+			buildConfigurationList = 7B64387226A6C544000D0F65 /* Build configuration list for PBXNativeTarget "iOS-Swift-UITests" */;
 			buildPhases = (
 				7B64386426A6C544000D0F65 /* Sources */,
 				7B64386526A6C544000D0F65 /* Frameworks */,
@@ -662,11 +662,11 @@
 				D83A30CB279F075800372D0A /* PBXTargetDependency */,
 				7B64386E26A6C544000D0F65 /* PBXTargetDependency */,
 			);
-			name = "iOS-SwiftUITests";
+			name = "iOS-Swift-UITests";
 			packageProductDependencies = (
 			);
 			productName = "iOS-SwiftUITests";
-			productReference = 7B64386826A6C544000D0F65 /* iOS-SwiftUITests.xctest */;
+			productReference = 7B64386826A6C544000D0F65 /* iOS-Swift-UITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 		848A2560286E3351008A8858 /* PerformanceBenchmarks */ = {
@@ -786,7 +786,6 @@
 			);
 			mainGroup = 637AFD9D243B02760034958B;
 			packageReferences = (
-				6268F2C02B0DF9920019DA38 /* XCRemoteSwiftPackageReference "Nimble" */,
 			);
 			productRefGroup = 637AFDA7243B02760034958B /* Products */;
 			projectDirPath = "";
@@ -799,7 +798,7 @@
 			projectRoot = "";
 			targets = (
 				637AFDA5243B02760034958B /* iOS-Swift */,
-				7B64386726A6C544000D0F65 /* iOS-SwiftUITests */,
+				7B64386726A6C544000D0F65 /* iOS-Swift-UITests */,
 				848A2560286E3351008A8858 /* PerformanceBenchmarks */,
 				D840D51F273A07F400CDF142 /* iOS-SwiftClip */,
 				D8269A38274C095E00BD5BD5 /* iOS13-Swift */,
@@ -842,13 +841,6 @@
 			fileType = wrapper.framework;
 			path = SentrySwiftUI.framework;
 			remoteRef = D8105B5B297E792200299F03 /* PBXContainerItemProxy */;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		D81A349A291D0B2C005A27A9 /* SentryPrivate.framework */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.framework;
-			path = SentryPrivate.framework;
-			remoteRef = D81A3499291D0B2C005A27A9 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 		D84DAD712B177DB2003CF120 /* SentryTestUtilsDynamic.framework */ = {
@@ -946,6 +938,7 @@
 				84AB90712A5001000054C99A /* ProfilingViewController.swift in Sources */,
 				84FB812A284001B800F3A94A /* SentryBenchmarking.mm in Sources */,
 				84ACC4432A73CD0700932A18 /* ProfilingCPUWork.swift in Sources */,
+				847670302BAA4AFA001A4E31 /* NSObject+SentryAppSetup.m in Sources */,
 				D8F3D052274E572F00B56F8C /* DSNStorage.swift in Sources */,
 				D8F3D054274E572F00B56F8C /* RandomErrors.swift in Sources */,
 				D80D021329EE93630084393D /* ErrorsViewController.swift in Sources */,
@@ -957,6 +950,7 @@
 				D8DBDA78274D5FC400007380 /* SplitViewController.swift in Sources */,
 				84ACC43C2A73CB5900932A18 /* ProfilingNetworkScanner.swift in Sources */,
 				D80D021A29EE936F0084393D /* ExtraViewController.swift in Sources */,
+				B70038852BB33E7700065A38 /* ReplaceContentViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1219,6 +1213,7 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = "RELEASE=1";
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
@@ -1252,7 +1247,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 8.20.0;
+				MARKETING_VERSION = 8.29.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.sentry.sample.iOS-Swift";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "match Development io.sentry.sample.iOS-Swift";
@@ -1281,7 +1276,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 8.20.0;
+				MARKETING_VERSION = 8.29.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.sentry.sample.iOS-Swift";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "match AppStore io.sentry.sample.iOS-Swift";
@@ -1300,14 +1295,14 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = 97JCY7859U;
-				INFOPLIST_FILE = "iOS-SwiftUITests/Info.plist";
+				INFOPLIST_FILE = "iOS-Swift-UITests/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "io.sentry.iOS-SwiftUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "io.sentry.iOS-Swift-UITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "match Development io.sentry.iOS-SwiftUITests.xctrunner";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "";
@@ -1324,14 +1319,14 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = 97JCY7859U;
-				INFOPLIST_FILE = "iOS-SwiftUITests/Info.plist";
+				INFOPLIST_FILE = "iOS-Swift-UITests/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "io.sentry.iOS-SwiftUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "io.sentry.iOS-Swift-UITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "match AppStore io.sentry.iOS-SwiftUITests.xctrunner";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "";
@@ -1431,6 +1426,7 @@
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PREPROCESSOR_DEFINITIONS = "TEST=1";
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
@@ -1444,7 +1440,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Test;
@@ -1485,14 +1481,14 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = 97JCY7859U;
-				INFOPLIST_FILE = "iOS-SwiftUITests/Info.plist";
+				INFOPLIST_FILE = "iOS-Swift-UITests/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "io.sentry.iOS-SwiftUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "io.sentry.iOS-Swift-UITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "match Development io.sentry.iOS-SwiftUITests.xctrunner";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "";
@@ -1655,6 +1651,7 @@
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PREPROCESSOR_DEFINITIONS = "TESTCI=1";
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
@@ -1668,7 +1665,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				VALIDATE_PRODUCT = YES;
 			};
 			name = TestCI;
@@ -1709,14 +1706,14 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = 97JCY7859U;
-				INFOPLIST_FILE = "iOS-SwiftUITests/Info.plist";
+				INFOPLIST_FILE = "iOS-Swift-UITests/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "io.sentry.iOS-SwiftUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "io.sentry.iOS-Swift-UITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "match Development io.sentry.iOS-SwiftUITests.xctrunner";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "";
@@ -1928,7 +1925,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 8.20.0;
+				MARKETING_VERSION = 8.29.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.sentry.sample.iOS-Swift.Clip";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "match Development io.sentry.sample.iOS-Swift.Clip";
@@ -1963,7 +1960,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 8.20.0;
+				MARKETING_VERSION = 8.29.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.sentry.sample.iOS-Swift.Clip";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "match AppStore io.sentry.sample.iOS-Swift.Clip";
@@ -2042,7 +2039,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		7B64387226A6C544000D0F65 /* Build configuration list for PBXNativeTarget "iOS-SwiftUITests" */ = {
+		7B64387226A6C544000D0F65 /* Build configuration list for PBXNativeTarget "iOS-Swift-UITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				7B64386F26A6C544000D0F65 /* Debug */,
@@ -2098,17 +2095,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		6268F2C02B0DF9920019DA38 /* XCRemoteSwiftPackageReference "Nimble" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/Quick/Nimble";
-			requirement = {
-				kind = exactVersion;
-				version = 10.0.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCVersionGroup section */
 		D845F35927BAD4CC00A4D7A2 /* SentryData.xcdatamodeld */ = {

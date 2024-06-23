@@ -11,12 +11,12 @@
 #    import <Foundation/Foundation.h>
 #    import <PrivateSentrySDKOnly.h>
 #    import <SentryAppState.h>
-#    import <SentryCurrentDateProvider.h>
 #    import <SentryDependencyContainer.h>
 #    import <SentryDispatchQueueWrapper.h>
 #    import <SentryInternalNotificationNames.h>
 #    import <SentryLog.h>
 #    import <SentrySDK+Private.h>
+#    import <SentrySwift.h>
 #    import <UIKit/UIKit.h>
 
 static NSDate *runtimeInit = nil;
@@ -213,6 +213,7 @@ SentryAppStartTracker () <SentryFramesTrackerListener>
             [[SentryAppStartMeasurement alloc] initWithType:appStartType
                                                 isPreWarmed:isPreWarmed
                                           appStartTimestamp:appStartTimestamp
+                                 runtimeInitSystemTimestamp:sysctl.runtimeInitSystemTimestamp
                                                    duration:appStartDuration
                                        runtimeInitTimestamp:runtimeInit
                               moduleInitializationTimestamp:sysctl.moduleInitializationTimestamp
@@ -225,12 +226,12 @@ SentryAppStartTracker () <SentryFramesTrackerListener>
 // With only running this once we know that the process is a new one when the following
 // code is executed.
 // We need to make sure the block runs on each test instead of only once
-#    if TEST
+#    if defined(TEST) || defined(TESTCI) || defined(DEBUG)
     block();
 #    else
     static dispatch_once_t once;
     [self.dispatchQueue dispatchOnce:&once block:block];
-#    endif
+#    endif // defined(TEST) || defined(TESTCI) || defined(DEBUG)
 }
 
 /**
@@ -315,9 +316,9 @@ SentryAppStartTracker () <SentryFramesTrackerListener>
 
     [self.framesTracker removeListener:self];
 
-#    if TEST
+#    if defined(TEST) || defined(TESTCI) || defined(DEBUG)
     self.isRunning = NO;
-#    endif
+#    endif // defined(TEST) || defined(TESTCI) || defined(DEBUG)
 }
 
 - (void)dealloc

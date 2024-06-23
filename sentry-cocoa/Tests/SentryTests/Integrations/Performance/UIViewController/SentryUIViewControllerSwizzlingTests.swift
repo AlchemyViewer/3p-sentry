@@ -1,6 +1,6 @@
 #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
 
-import Sentry
+@testable import Sentry
 import SentryTestUtils
 import SentryTestUtilsDynamic
 import XCTest
@@ -15,7 +15,7 @@ class SentryUIViewControllerSwizzlingTests: XCTestCase {
         let binaryImageCache: SentryBinaryImageCache
         
         init() {
-            subClassFinder = TestSubClassFinder(dispatchQueue: dispatchQueue, objcRuntimeWrapper: objcRuntimeWrapper)
+            subClassFinder = TestSubClassFinder(dispatchQueue: dispatchQueue, objcRuntimeWrapper: objcRuntimeWrapper, swizzleClassNameExcludes: [])
             binaryImageCache = SentryDependencyContainer.sharedInstance().binaryImageCache
         }
          

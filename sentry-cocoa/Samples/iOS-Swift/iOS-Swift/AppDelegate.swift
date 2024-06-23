@@ -4,29 +4,41 @@ import UIKit
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
     
+    private var randomDistributionTimer: Timer?
+    
     var window: UIWindow?
 
     static let defaultDSN = "https://6cc9bae94def43cab8444a99e0031c28@o447951.ingest.sentry.io/5428557"
 
-    //swiftlint:disable function_body_length
+    //swiftlint:disable function_body_length cyclomatic_complexity
     static func startSentry() {
+        let args = ProcessInfo.processInfo.arguments
+        let env = ProcessInfo.processInfo.environment
+        
         // For testing purposes, we want to be able to change the DSN and store it to disk. In a real app, you shouldn't need this behavior.
-        let dsn = DSNStorage.shared.getDSN() ?? AppDelegate.defaultDSN
+        let dsn = env["--io.sentry.dsn"] ?? DSNStorage.shared.getDSN() ?? AppDelegate.defaultDSN
         DSNStorage.shared.saveDSN(dsn: dsn)
         
-        SentrySDK.start { options in
+        SentrySDK.start(configureOptions: { options in
             options.dsn = dsn
             options.beforeSend = { event in
                 return event
             }
+            options.enableSigtermReporting = true
+            options.beforeCaptureScreenshot = { _ in
+                return true
+            }
             options.debug = true
             
-            if #available(iOS 15.0, *) {
-                options.enableMetricKit = true
+            if #available(iOS 16.0, *), !args.contains("--disable-session-replay") {
+                options.experimental.sessionReplay = SentryReplayOptions(sessionSampleRate: 1, errorSampleRate: 1, redactAllText: true, redactAllImages: true)
+                options.experimental.sessionReplay.quality = .high
             }
             
-            let args = ProcessInfo.processInfo.arguments
-            let env = ProcessInfo.processInfo.environment
+            if #available(iOS 15.0, *), !args.contains("--disable-metrickit-integration") {
+                options.enableMetricKit = true
+                options.enableMetricKitRawPayload = true
+            }
             
             var tracesSampleRate: NSNumber = 1
             if let tracesSampleRateOverride = env["--io.sentry.tracesSampleRate"] {
@@ -34,14 +46,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             }
             options.tracesSampleRate = tracesSampleRate
             
-            if let tracesSamplerValue = env["--io.sentry.tracersSamplerValue"] {
+            if let tracesSamplerValue = env["--io.sentry.tracesSamplerValue"] {
                 options.tracesSampler = { _ in
                     return NSNumber(value: (tracesSamplerValue as NSString).integerValue)
                 }
             }
             
-            var profilesSampleRate: NSNumber = 1
-            if let profilesSampleRateOverride = env["--io.sentry.profilesSampleRate"] {
+            var profilesSampleRate: NSNumber? = 1
+            if args.contains("--io.sentry.enableContinuousProfiling") {
+                profilesSampleRate = nil
+            } else if let profilesSampleRateOverride = env["--io.sentry.profilesSampleRate"] {
                profilesSampleRate = NSNumber(value: (profilesSampleRateOverride as NSString).integerValue)
             }
             options.profilesSampleRate = profilesSampleRate
@@ -51,18 +65,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                     return NSNumber(value: (profilesSamplerValue as NSString).integerValue)
                 }
             }
-                        
+
+            options.enableAppLaunchProfiling = args.contains("--profile-app-launches")
+
+            options.enableAutoSessionTracking = !args.contains("--disable-automatic-session-tracking")
             options.sessionTrackingIntervalMillis = 5_000
             options.attachScreenshot = true
             options.attachViewHierarchy = true
+       
 #if targetEnvironment(simulator)
-            options.environment = "test-app"
+            options.enableSpotlight = !args.contains("--disable-spotlight")
 #else
-            options.environment = "device-tests"
             options.enableWatchdogTerminationTracking = false // The UI tests generate false OOMs
 #endif
             options.enableTimeToFullDisplayTracing = true
             options.enablePerformanceV2 = true
+            options.enableMetrics = !args.contains("--disable-metrics")
             
             options.add(inAppInclude: "iOS_External")
 
@@ -81,9 +99,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             options.enableNetworkBreadcrumbs = !args.contains("--disable-network-breadcrumbs")
             options.enableSwizzling = !args.contains("--disable-swizzling")
             options.enableCrashHandler = !args.contains("--disable-crash-handler")
+            options.enableTracing = !args.contains("--disable-tracing")
 
             // because we run CPU for 15 seconds at full throttle, we trigger ANR issues being sent. disable such during benchmarks.
             options.enableAppHangTracking = !isBenchmarking && !args.contains("--disable-anr-tracking")
+            options.enableWatchdogTerminationTracking = !isBenchmarking && !args.contains("--disable-watchdog-tracking")
             options.appHangTimeoutInterval = 2
             options.enableCaptureFailedRequests = true
             let httpStatusCodeRange = HttpStatusCodeRange(min: 400, max: 599)
@@ -96,14 +116,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             }
             
             options.initialScope = { scope in
-                let processInfoEnvironment = ProcessInfo.processInfo.environment["io.sentry.sdk-environment"]
-                
-                if processInfoEnvironment != nil {
-                    scope.setEnvironment(processInfoEnvironment)
+                if let environmentOverride = env["--io.sentry.sdk-environment"] {
+                    scope.setEnvironment(environmentOverride)
                 } else if isBenchmarking {
                     scope.setEnvironment("benchmarking")
                 } else {
-                    scope.setEnvironment("debug")
+        #if targetEnvironment(simulator)
+                    scope.setEnvironment("simulator")
+        #else
+                    scope.setEnvironment("device")
+        #endif // targetEnvironment(simulator)
                 }
                 
                 scope.setTag(value: "swift", key: "language")
@@ -120,17 +142,27 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 }
                 return scope
             }
-        }
+        })
+        
+        SentrySDK.metrics.increment(key: "app.start", value: 1.0, tags: ["view": "app-delegate"])
+
     }
-    //swiftlint:enable function_body_length
+    //swiftlint:enable function_body_length cyclomatic_complexity
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         
-        print("[iOS-Swift] launch arguments: \(ProcessInfo.processInfo.arguments)")
-        print("[iOS-Swift] environment: \(ProcessInfo.processInfo.environment)")
+        print("[iOS-Swift] [debug] launch arguments: \(ProcessInfo.processInfo.arguments)")
+        print("[iOS-Swift] [debug] environment: \(ProcessInfo.processInfo.environment)")
         
-        maybeWipeData()
+        if ProcessInfo.processInfo.arguments.contains("--io.sentry.wipe-data") {
+            removeAppData()
+        }
         AppDelegate.startSentry()
+        
+        randomDistributionTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+            let random = Double.random(in: 0..<1_000)
+            SentrySDK.metrics.distribution(key: "random.distribution", value: random)
+        }
         
         if #available(iOS 15.0, *) {
             metricKit.receiveReports()
@@ -143,6 +175,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         if #available(iOS 15.0, *) {
             metricKit.pauseReports()
         }
+        
+        randomDistributionTimer?.invalidate()
+        randomDistributionTimer = nil
     }
     
     // Workaround for 'Stored properties cannot be marked potentially unavailable with '@available''
@@ -158,18 +193,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return _metricKit as! MetricKitManager
         // swiftlint:enable force_cast
     }
-}
-
-private extension AppDelegate {
-    func maybeWipeData() {
-        if ProcessInfo.processInfo.arguments.contains("--io.sentry.wipe-data") {
-            print("[iOS-Swift] removing app data")
-            let appSupport = NSSearchPathForDirectoriesInDomains(.applicationSupportDirectory, .userDomainMask, true).first!
-            let cache = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first!
-            for path in [appSupport, cache] {
-                for item in FileManager.default.enumerator(atPath: path)! {
-                    try! FileManager.default.removeItem(atPath: (path as NSString).appendingPathComponent((item as! String)))
-                }
+    
+    /**
+     * previously tried putting this in an AppDelegate.load override in ObjC, but it wouldn't run until
+     * after a launch profiler would have an opportunity to run, since SentryProfiler.load would always run
+     * first due to being dynamically linked in a framework module. it is sufficient to do it before
+     * calling SentrySDK.startWithOptions to clear state for testProfiledAppLaunches because we don't make
+     * any assertions on a launch profile the first launch of the app in that test
+     */
+    private func removeAppData() {
+        print("[iOS-Swift] [debug] removing app data")
+        let appSupport = NSSearchPathForDirectoriesInDomains(.applicationSupportDirectory, .userDomainMask, true).first!
+        let cache = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first!
+        for path in [appSupport, cache] {
+            guard let files = FileManager.default.enumerator(atPath: path) else { return }
+            for item in files {
+                try! FileManager.default.removeItem(atPath: (path as NSString).appendingPathComponent((item as! String)))
             }
         }
     }
