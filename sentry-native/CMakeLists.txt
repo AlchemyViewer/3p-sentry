@@ -285,11 +285,11 @@ if(SENTRY_TRANSPORT_CURL)
 #	else()
 		set(CURL_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/../stage/packages/include)
 		set(CURL_LIBRARIES 
-		${CMAKE_SOURCE_DIR}/../stage/packages/lib/release/libcurl.a
-		${CMAKE_SOURCE_DIR}/../stage/packages/lib/release/libssl.a
-		${CMAKE_SOURCE_DIR}/../stage/packages/lib/release/libcrypto.a
-		${CMAKE_SOURCE_DIR}/../stage/packages/lib/release/libnghttp2.a
-		${CMAKE_SOURCE_DIR}/../stage/packages/lib/release/libz.a
+		${CMAKE_SOURCE_DIR}/../stage/packages/lib/libcurl.a
+		${CMAKE_SOURCE_DIR}/../stage/packages/lib/libssl.a
+		${CMAKE_SOURCE_DIR}/../stage/packages/lib/libcrypto.a
+		${CMAKE_SOURCE_DIR}/../stage/packages/lib/libnghttp2.a
+		${CMAKE_SOURCE_DIR}/../stage/packages/lib/libz.a
 		)
 
 		# Needed for cmake < 3.12 support (cmake 3.12 introduced the target CURL::libcurl)
@@ -303,9 +303,9 @@ if(SENTRY_TRANSPORT_CURL)
 endif()
 
 if(SENTRY_TRANSPORT_COMPRESSION)
-	if(NOT ZLIB_FOUND)
-		find_package(ZLIB REQUIRED)
-	endif()
+	# if(NOT ZLIB_FOUND)
+	# 	find_package(ZLIB REQUIRED)
+	# endif()
 
 	if(SENTRY_BACKEND_CRASHPAD)
 		set(CRASHPAD_ZLIB_SYSTEM ON CACHE BOOL "Force CRASHPAD_ZLIB_SYSTEM when enabling transport compression" FORCE)
