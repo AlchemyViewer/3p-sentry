@@ -65,7 +65,7 @@
         <key>name</key>
         <string>curl</string>
         <key>canonical_repo</key>
-        <string>https://git.alchemyviewer.org/alchemy/thirdparty/3p-curl</string>
+        <string>https://github.com/AlchemyViewer/3p-curl</string>
         <key>description</key>
         <string>Library for transferring data specified with URL syntax</string>
         <key>source_type</key>
@@ -194,7 +194,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <key>name</key>
         <string>openssl</string>
         <key>canonical_repo</key>
-        <string>https://git.alchemyviewer.org/alchemy/thirdparty/3p-openssl</string>
+        <string>https://github.com/AlchemyViewer/3p-openssl</string>
         <key>description</key>
         <string>Secure Sockets Layer (SSL v2/v3) and Transport Layer Security (TLS v1) Library</string>
       </map>
@@ -256,7 +256,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <key>name</key>
         <string>zlib-ng</string>
         <key>canonical_repo</key>
-        <string>https://git.alchemyviewer.org/alchemy/thirdparty/3p-zlib-ng</string>
+        <string>https://github.com/AlchemyViewer/3p-zlib-ng</string>
         <key>description</key>
         <string>zlib replacement with optimizations for next generation systems.</string>
       </map>
@@ -287,7 +287,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
           </map>
           <key>manifest</key>
           <array>
-            <string>include/sentry/*</string>
+            <string>include/*</string>
             <string>LICENSES/sentry.txt</string>
 </array>
           <key>build_directory</key>
@@ -334,7 +334,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
           </map>
           <key>manifest</key>
           <array>
-            <string>lib/release/*</string>
+            <string>lib/*.a</string>
 </array>
           <key>name</key>
           <string>linux</string>

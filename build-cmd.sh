@@ -38,7 +38,8 @@ case "$AUTOBUILD_PLATFORM" in
             mkdir -p "build_release"
             pushd "build_release"
                 # Invoke cmake and use as official build
-                cmake -G "$AUTOBUILD_WIN_CMAKE_GEN" -A "$AUTOBUILD_WIN_VSPLATFORM" .. \
+                cmake -G Ninja .. \
+                    -DCMAKE_BUILD_TYPE="RelWithDebInfo" \
                     -DCMAKE_CXX_STANDARD=17 \
                     -DCMAKE_INSTALL_PREFIX=$(cygpath -w "$stage/sentry")
 
@@ -75,24 +76,13 @@ case "$AUTOBUILD_PLATFORM" in
                 popd
             popd
             cp -a Carthage/Build/Mac/* $stage/lib/release/
-
-            if [ -n "${APPLE_SIGNATURE:=""}" -a -n "${APPLE_KEY:=""}" -a -n "${APPLE_KEYCHAIN:=""}" ]; then
-                KEYCHAIN_PATH="$HOME/Library/Keychains/$APPLE_KEYCHAIN"
-                security unlock-keychain -p $APPLE_KEY $KEYCHAIN_PATH
-                codesign --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNATURE" --force --timestamp "$stage/lib/release/Sentry.framework" || true
-                codesign --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNATURE" --force --timestamp "$stage/lib/release/SentryPrivate.framework" || true
-                codesign --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNATURE" --force --timestamp "$stage/lib/release/SentrySwiftUI.framework" || true
-                security lock-keychain $KEYCHAIN_PATH
-            else
-                echo "Code signing not configured; skipping codesign."
-            fi
         popd
     ;;            
 
     # -------------------------- linux, linux64 --------------------------
     linux*)
         pushd "$NATIVE_SOURCE_DIR"
-            # Linux build environment at Alchemy comes pre-polluted with stuff that can
+            # Linux build environment at Linden comes pre-polluted with stuff that can
             # seriously damage 3rd-party builds.  Environmental garbage you can expect
             # includes:
             #
@@ -107,17 +97,9 @@ case "$AUTOBUILD_PLATFORM" in
             #
             unset DISTCC_HOSTS CFLAGS CPPFLAGS CXXFLAGS
 
-            # Default target per autobuild build --address-size
-            opts="${TARGET_OPTS:--m$AUTOBUILD_ADDRSIZE}"
-            # Use simple flags for crash reporter
-            DEBUG_COMMON_FLAGS="$opts -Og -g -fPIC -DPIC"
-            RELEASE_COMMON_FLAGS="$opts -O2 -g -fPIC -DPIC -D_FORTIFY_SOURCE=2"
-            DEBUG_CFLAGS="$DEBUG_COMMON_FLAGS"
-            RELEASE_CFLAGS="$RELEASE_COMMON_FLAGS"
-            DEBUG_CXXFLAGS="$DEBUG_COMMON_FLAGS -std=c++17"
-            RELEASE_CXXFLAGS="$RELEASE_COMMON_FLAGS -std=c++17"
-            DEBUG_CPPFLAGS="-DPIC"
-            RELEASE_CPPFLAGS="-DPIC -D_FORTIFY_SOURCE=2"
+            # Default target per --address-size
+            opts_c="${TARGET_OPTS:--m$AUTOBUILD_ADDRSIZE $LL_BUILD_RELEASE_CFLAGS}"
+            opts_cxx="${TARGET_OPTS:--m$AUTOBUILD_ADDRSIZE $LL_BUILD_RELEASE_CXXFLAGS}"
 
             # Handle any deliberate platform targeting
             if [ -z "${TARGET_CPPFLAGS:-}" ]; then
@@ -134,22 +116,14 @@ case "$AUTOBUILD_PLATFORM" in
                 cmake ../ -G"Ninja" \
                     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
                     -DCMAKE_CXX_STANDARD=17 \
-                    -DCMAKE_C_FLAGS="$RELEASE_CFLAGS" \
-                    -DCMAKE_CXX_FLAGS="$RELEASE_CXXFLAGS" \
-                    -DCMAKE_INSTALL_PREFIX="$stage/sentry" \
+                    -DCMAKE_C_FLAGS="$opts_c" \
+                    -DCMAKE_CXX_FLAGS="$opts_cxx" \
+                    -DCMAKE_INSTALL_PREFIX="$stage" \
                     -DSENTRY_BUILD_SHARED_LIBS=FALSE \
                     -DSENTRY_BACKEND="breakpad"
 
                 cmake --build . --config RelWithDebInfo --parallel $AUTOBUILD_CPU_COUNT
                 cmake --install . --config RelWithDebInfo
-            popd
-
-            pushd "$stage/sentry"
-                mkdir -p "$stage/include/sentry"
-                mkdir -p "$stage/lib/release"
-
-                cp -a lib/*.a "$stage/lib/release"
-                cp -a include/* "$stage/include/sentry"
             popd
         popd
     ;;
