@@ -34,7 +34,7 @@ class SentrySessionTrackerTests: XCTestCase {
         }
         
         func setNewHubToSDK() {
-            let hub = SentryHub(client: client, andScope: nil, andCrashWrapper: self.sentryCrash)
+            let hub = SentryHub(client: client, andScope: nil, andCrashWrapper: self.sentryCrash, andDispatchQueue: SentryDispatchQueueWrapper())
             SentrySDK.setCurrentHub(hub)
         }
     }
@@ -357,7 +357,7 @@ class SentrySessionTrackerTests: XCTestCase {
         sut.stop()
         
         let invocations = fixture.notificationCenter.removeObserverWithNameInvocations
-        let notificationNames = invocations.invocations.map { $0.name }
+        let notificationNames = invocations.invocations.map { $0 }
         
         assertNotificationNames(notificationNames)
     }

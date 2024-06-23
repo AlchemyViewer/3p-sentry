@@ -4,6 +4,7 @@
 
 @class SentryOptions, SentryEvent, SentryBreadcrumb, SentryScope, SentryUser, SentryId,
     SentryUserFeedback, SentryTransactionContext;
+@class SentryMetricsAPI;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -23,6 +24,8 @@ SENTRY_NO_INIT
  * Indicates whether the SentrySDK is enabled.
  */
 @property (class, nonatomic, readonly) BOOL isEnabled;
+
+@property (class, nonatomic, readonly) SentryMetricsAPI *metrics;
 
 /**
  * Inits and configures Sentry (SentryHub, SentryClient) and sets up all integrations. Make sure to
@@ -252,6 +255,16 @@ SENTRY_NO_INIT
  * Checks if the last program execution terminated with a crash.
  */
 @property (nonatomic, class, readonly) BOOL crashedLastRun;
+
+/**
+ * Checks if the SDK detected a start-up crash during SDK initialization.
+ *
+ * @note The SDK init waits synchronously for up to 5 seconds to flush out events if the app crashes
+ * within 2 seconds after the SDK init.
+ *
+ * @return @c YES if the SDK detected a start-up crash and @c NO if not.
+ */
+@property (nonatomic, class, readonly) BOOL detectedStartUpCrash;
 
 /**
  * Set user to the current Scope of the current Hub.
