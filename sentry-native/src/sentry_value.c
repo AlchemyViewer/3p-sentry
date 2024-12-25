@@ -9,12 +9,17 @@
 #if defined(_MSC_VER)
 #    pragma warning(push)
 #    pragma warning(disable : 4127) // conditional expression is constant
+#elif defined(__clang__)
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wstatic-in-inline"
 #endif
 
 #include "../vendor/mpack.h"
 
 #if defined(_MSC_VER)
 #    pragma warning(pop)
+#elif defined(__clang__)
+#    pragma clang diagnostic pop
 #endif
 
 #include "sentry_alloc.h"
@@ -629,8 +634,22 @@ sentry__value_clone(sentry_value_t value)
     }
 }
 
+/**
+ * This appends `v` to the List `value`.
+ * To make this work properly as a ring buffer, the value list needs to have
+ * the ring buffer start index as the first element
+ * (e.g, 1 until max is exceeded, then it will update for each added item)
+ *
+ * It will remove the oldest value in the list, in case the total number of
+ * items would exceed `max`.
+ *
+ * The list is of size `max + 1` to store the start index.
+ *
+ * Returns 0 on success.
+ */
 int
-sentry__value_append_bounded(sentry_value_t value, sentry_value_t v, size_t max)
+sentry__value_append_ringbuffer(
+    sentry_value_t value, sentry_value_t v, size_t max)
 {
     thing_t *thing = value_as_unfrozen_thing(value);
     if (!thing || thing_get_type(thing) != THING_TYPE_LIST) {
@@ -638,31 +657,24 @@ sentry__value_append_bounded(sentry_value_t value, sentry_value_t v, size_t max)
     }
 
     list_t *l = thing->payload._ptr;
-
-    if (l->len < max) {
+    if (l->len == 0) {
+        sentry_value_append(value, sentry_value_new_int32(1));
+    }
+    if (l->len < max + 1) {
         return sentry_value_append(value, v);
     }
+    if (l->len > max + 1) {
+        SENTRY_WARNF("Cannot reduce Ringbuffer list size from %d to %d.",
+            l->len - 1, max);
+        goto fail;
+    }
+    const int32_t start_idx = sentry_value_as_int32(l->items[0]);
 
-    // len: 120
-    // max: 100
-    // move to 0
-    //   move 99 items (len - 1)
-    //   from 20
+    sentry_value_decref(l->items[start_idx]);
+    l->items[start_idx] = v;
+    l->items[0] = sentry_value_new_int32((start_idx % (int32_t)max) + 1);
 
-    size_t to_move = max >= 1 ? max - 1 : 0;
-    size_t to_shift = l->len - to_move;
-    for (size_t i = 0; i < to_shift; i++) {
-        sentry_value_decref(l->items[i]);
-    }
-    if (to_move) {
-        memmove(l->items, l->items + to_shift, to_move * sizeof(l->items[0]));
-    }
-    if (max >= 1) {
-        l->items[max - 1] = v;
-    } else {
-        sentry_value_decref(v);
-    }
-    l->len = max;
+    l->len = max + 1;
     return 0;
 
 fail:
@@ -742,8 +754,7 @@ sentry_value_get_by_key_n(sentry_value_t value, const char *k, size_t k_len)
 sentry_value_t
 sentry_value_get_by_key(sentry_value_t value, const char *k)
 {
-    const size_t k_len = k ? strlen(k) : 0;
-    return sentry_value_get_by_key_n(value, k, k_len);
+    return sentry_value_get_by_key_n(value, k, sentry__guarded_strlen(k));
 }
 
 sentry_value_t
@@ -839,6 +850,28 @@ sentry_value_as_string(sentry_value_t value)
     } else {
         return "";
     }
+}
+
+sentry_value_t
+sentry__value_ring_buffer_to_list(const sentry_value_t rb)
+{
+    const thing_t *thing = value_as_thing(rb);
+    if (!thing || thing_get_type(thing) != THING_TYPE_LIST) {
+        return sentry_value_new_null();
+    }
+    const list_t *rb_list = thing->payload._ptr;
+    if (rb_list->len == 0) {
+        return sentry_value_new_list();
+    }
+    const size_t start_idx = sentry_value_as_int32(rb_list->items[0]);
+
+    sentry_value_t rv = sentry_value_new_list();
+    for (size_t i = 0; i < rb_list->len - 1; i++) {
+        const size_t idx = (start_idx - 1 + i) % (rb_list->len - 1) + 1;
+        sentry_value_incref(rb_list->items[idx]);
+        sentry_value_append(rv, rb_list->items[idx]);
+    }
+    return rv;
 }
 
 int
@@ -945,7 +978,7 @@ sentry__jsonwriter_write_value(sentry_jsonwriter_t *jw, sentry_value_t value)
 char *
 sentry_value_to_json(sentry_value_t value)
 {
-    sentry_jsonwriter_t *jw = sentry__jsonwriter_new(NULL);
+    sentry_jsonwriter_t *jw = sentry__jsonwriter_new_sb(NULL);
     if (!jw) {
         return NULL;
     }
@@ -1151,10 +1184,8 @@ sentry_value_t
 sentry_value_new_message_event(
     sentry_level_t level, const char *logger, const char *text)
 {
-    size_t logger_len = logger ? strlen(logger) : 0;
-    size_t text_len = text ? strlen(text) : 0;
-    return sentry_value_new_message_event_n(
-        level, logger, logger_len, text, text_len);
+    return sentry_value_new_message_event_n(level, logger,
+        sentry__guarded_strlen(logger), text, sentry__guarded_strlen(text));
 }
 
 static void
@@ -1186,9 +1217,8 @@ sentry_value_new_breadcrumb_n(
 sentry_value_t
 sentry_value_new_breadcrumb(const char *type, const char *message)
 {
-    const size_t type_len = type ? strlen(type) : 0;
-    const size_t message_len = message ? strlen(message) : 0;
-    return sentry_value_new_breadcrumb_n(type, type_len, message, message_len);
+    return sentry_value_new_breadcrumb_n(type, sentry__guarded_strlen(type),
+        message, sentry__guarded_strlen(message));
 }
 
 sentry_value_t
@@ -1206,9 +1236,8 @@ sentry_value_new_exception_n(
 sentry_value_t
 sentry_value_new_exception(const char *type, const char *value)
 {
-    const size_t type_len = type ? strlen(type) : 0;
-    const size_t value_len = value ? strlen(value) : 0;
-    return sentry_value_new_exception_n(type, type_len, value, value_len);
+    return sentry_value_new_exception_n(type, sentry__guarded_strlen(type),
+        value, sentry__guarded_strlen(value));
 }
 
 sentry_value_t
@@ -1236,8 +1265,7 @@ sentry_value_new_thread_n(uint64_t id, const char *name, size_t name_len)
 sentry_value_t
 sentry_value_new_thread(uint64_t id, const char *name)
 {
-    const size_t name_len = name ? strlen(name) : 0;
-    return sentry_value_new_thread_n(id, name, name_len);
+    return sentry_value_new_thread_n(id, name, sentry__guarded_strlen(name));
 }
 
 sentry_value_t
@@ -1269,11 +1297,9 @@ sentry_value_t
 sentry_value_new_user_feedback(const sentry_uuid_t *uuid, const char *name,
     const char *email, const char *comments)
 {
-    size_t name_len = name ? strlen(name) : 0;
-    size_t email_len = email ? strlen(email) : 0;
-    size_t comments_len = email ? strlen(comments) : 0;
-    return sentry_value_new_user_feedback_n(
-        uuid, name, name_len, email, email_len, comments, comments_len);
+    return sentry_value_new_user_feedback_n(uuid, name,
+        sentry__guarded_strlen(name), email, sentry__guarded_strlen(email),
+        comments, sentry__guarded_strlen(comments));
 }
 
 sentry_value_t

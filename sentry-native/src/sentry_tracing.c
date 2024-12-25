@@ -75,11 +75,8 @@ sentry_transaction_context_new_n(const char *name, size_t name_len,
 sentry_transaction_context_t *
 sentry_transaction_context_new(const char *name, const char *operation)
 {
-    size_t name_len = name ? strlen(name) : 0;
-    size_t operation_len = operation ? strlen(operation) : 0;
-
-    return sentry_transaction_context_new_n(
-        name, name_len, operation, operation_len);
+    return sentry_transaction_context_new_n(name, sentry__guarded_strlen(name),
+        operation, sentry__guarded_strlen(operation));
 }
 
 void
@@ -154,6 +151,50 @@ sentry_transaction_context_remove_sampled(sentry_transaction_context_t *tx_cxt)
     }
 }
 
+/*
+ * Checks whether the string is a valid hex string over the given length and
+ * contains at least one non-zero character.
+ */
+static bool
+is_valid_nonzero_hexstring(const char *s, size_t len)
+{
+    bool has_nonzero = false;
+    for (size_t i = 0; i < len; i++) {
+        if (!isxdigit(s[i])) {
+            return false;
+        }
+        if (s[i] != '0') {
+            has_nonzero = true;
+        }
+    }
+    return has_nonzero;
+}
+
+static bool
+is_valid_id(const char *id, size_t expected_len, const char *id_type)
+{
+    const bool is_valid = id != NULL && strlen(id) == expected_len
+        && is_valid_nonzero_hexstring(id, expected_len);
+
+    if (!is_valid) {
+        SENTRY_WARNF("invalid %s format in given header", id_type);
+    }
+
+    return is_valid;
+}
+
+static bool
+is_valid_trace_id(const char *trace_id)
+{
+    return is_valid_id(trace_id, 32, "trace id");
+}
+
+static bool
+is_valid_span_id(const char *span_id)
+{
+    return is_valid_id(span_id, 16, "span id");
+}
+
 void
 sentry_transaction_context_update_from_header_n(
     sentry_transaction_context_t *tx_cxt, const char *key, size_t key_len,
@@ -180,6 +221,7 @@ sentry_transaction_context_update_from_header_n(
     const char *trace_id_start = value;
     const char *trace_id_end = memchr(trace_id_start, '-', value_len);
     if (!trace_id_end) {
+        SENTRY_WARN("invalid trace id format in given header");
         return;
     }
 
@@ -187,6 +229,10 @@ sentry_transaction_context_update_from_header_n(
 
     char *s
         = sentry__string_clone_n(trace_id_start, trace_id_end - trace_id_start);
+    if (!is_valid_trace_id(s)) {
+        sentry_free(s);
+        return;
+    }
     sentry_value_t trace_id = sentry__value_new_string_owned(s);
     sentry_value_set_by_key(inner, "trace_id", trace_id);
 
@@ -195,12 +241,20 @@ sentry_transaction_context_update_from_header_n(
     if (!span_id_end) {
         // no sampled flag
         sentry_value_t parent_span_id = sentry_value_new_string(span_id_start);
+        if (!is_valid_span_id(sentry_value_as_string(parent_span_id))) {
+            sentry_value_decref(parent_span_id);
+            return;
+        }
         sentry_value_set_by_key(inner, "parent_span_id", parent_span_id);
         return;
     }
     // else: we have a sampled flag
 
     s = sentry__string_clone_n(span_id_start, span_id_end - span_id_start);
+    if (!is_valid_span_id(s)) {
+        sentry_free(s);
+        return;
+    }
     sentry_value_t parent_span_id = sentry__value_new_string_owned(s);
     sentry_value_set_by_key(inner, "parent_span_id", parent_span_id);
 
@@ -212,11 +266,8 @@ void
 sentry_transaction_context_update_from_header(
     sentry_transaction_context_t *tx_cxt, const char *key, const char *value)
 {
-    size_t key_len = key ? strlen(key) : 0;
-    size_t value_len = value ? strlen(value) : 0;
-
-    sentry_transaction_context_update_from_header_n(
-        tx_cxt, key, key_len, value, value_len);
+    sentry_transaction_context_update_from_header_n(tx_cxt, key,
+        sentry__guarded_strlen(key), value, sentry__guarded_strlen(value));
 }
 
 sentry_transaction_t *
@@ -305,7 +356,7 @@ sentry__span_new(sentry_transaction_t *tx, sentry_value_t inner)
 
 sentry_value_t
 sentry__value_span_new_n(size_t max_spans, sentry_value_t parent,
-    sentry_slice_t operation, sentry_slice_t description)
+    sentry_slice_t operation, sentry_slice_t description, uint64_t timestamp)
 {
     if (!sentry_value_is_null(sentry_value_get_by_key(parent, "timestamp"))) {
         SENTRY_DEBUG("span's parent is already finished, not creating span");
@@ -327,7 +378,7 @@ sentry__value_span_new_n(size_t max_spans, sentry_value_t parent,
         sentry_value_new_string_n(description.ptr, description.len));
     sentry_value_set_by_key(child, "start_timestamp",
         sentry__value_new_string_owned(
-            sentry__usec_time_to_iso8601(sentry__usec_time())));
+            sentry__usec_time_to_iso8601(timestamp)));
 
     return child;
 fail:
@@ -336,13 +387,11 @@ fail:
 
 sentry_value_t
 sentry__value_span_new(size_t max_spans, sentry_value_t parent,
-    const char *operation, const char *description)
+    const char *operation, const char *description, uint64_t timestamp)
 {
-    const size_t operation_len = operation ? strlen(operation) : 0;
-    const size_t description_len = description ? strlen(description) : 0;
     return sentry__value_span_new_n(max_spans, parent,
-        (sentry_slice_t) { operation, operation_len },
-        (sentry_slice_t) { description, description_len });
+        sentry__slice_from_str(operation), sentry__slice_from_str(description),
+        timestamp);
 }
 
 sentry_value_t
@@ -417,10 +466,7 @@ set_tag_n(sentry_value_t item, sentry_slice_t tag, sentry_slice_t value)
 static void
 set_tag(sentry_value_t item, const char *tag, const char *value)
 {
-    const size_t tag_len = tag ? strlen(tag) : 0;
-    const size_t value_len = value ? strlen(value) : 0;
-    set_tag_n(item, (sentry_slice_t) { tag, tag_len },
-        (sentry_slice_t) { value, value_len });
+    set_tag_n(item, sentry__slice_from_str(tag), sentry__slice_from_str(value));
 }
 
 void
@@ -533,7 +579,7 @@ sentry_transaction_set_data(
     }
 }
 
-static const char txn_data_key[] = "extra";
+static const char txn_data_key[] = "data";
 static const size_t txn_data_key_len = sizeof(txn_data_key) - 1;
 
 void

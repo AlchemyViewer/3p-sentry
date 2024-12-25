@@ -75,7 +75,21 @@ class ExceptionHandler {
   // will immediately report the exception as unhandled without writing a
   // minidump, allowing another handler the opportunity to handle it.
   typedef bool (*FilterCallback)(void* context);
-
+#ifdef SENTRY_BACKEND_BREAKPAD
+  // A callback function to run after the minidump has been written.
+  // |minidump_id| is a unique id for the dump, so the minidump
+  // file is <dump_dir>/<minidump_id>.dmp.
+  // |context| is the value passed into the constructor.
+  // |user_context| is the context of exception's thread
+  // |succeeded| indicates whether a minidump file was successfully written.
+  // Return true if the exception was fully handled and breakpad should exit.
+  // Return false to allow any other exception handlers to process the
+  // exception.
+  typedef bool (*MinidumpCallback)(const char* dump_dir,
+                                   const char* minidump_id,
+                                   void* context, 
+                                   breakpad_ucontext_t *user_context, bool succeeded);
+#else
   // A callback function to run after the minidump has been written.
   // |minidump_id| is a unique id for the dump, so the minidump
   // file is <dump_dir>/<minidump_id>.dmp.
@@ -86,7 +100,9 @@ class ExceptionHandler {
   // exception.
   typedef bool (*MinidumpCallback)(const char* dump_dir,
                                    const char* minidump_id,
-                                   void* context, bool succeeded);
+                                   void* context,
+                                   bool succeeded);
+#endif
 
   // A callback function which will be called directly if an exception occurs.
   // This bypasses the minidump file writing and simply gives the client

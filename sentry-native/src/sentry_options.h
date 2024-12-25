@@ -35,7 +35,7 @@ typedef struct sentry_options_s {
     char *release;
     char *environment;
     char *dist;
-    char *http_proxy;
+    char *proxy;
     char *ca_certs;
     char *transport_thread_name;
     char *sdk_name;
@@ -71,6 +71,7 @@ typedef struct sentry_options_s {
     long user_consent;
     long refcount;
     uint64_t shutdown_timeout;
+    sentry_handler_strategy_t handler_strategy;
 } sentry_options_t;
 
 /**

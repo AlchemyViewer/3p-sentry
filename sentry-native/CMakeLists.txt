@@ -6,6 +6,7 @@ if(WIN32)
 else()
 	# The Android tools ship with this ancient version, which we need to support.
 	cmake_minimum_required (VERSION 3.10)
+	cmake_policy(SET CMP0077 NEW)
 endif()
 
 #read sentry-native version
@@ -24,6 +25,14 @@ set(SENTRY_MAIN_PROJECT OFF)
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
 	set(SENTRY_MAIN_PROJECT ON)
 endif()
+
+# We have 4 source directories:
+# * `CMAKE_SOURCE_DIR`: points to the directory of the top-level CMakeLists.txt of the main project.
+# * `CMAKE_CURRENT_SOURCE_DIR`: points to the directory of any CMakeLists.txt in any subdirectories.
+# * `PROJECT_SOURCE_DIR`: points to the directory of any CMakeLists.txt in any subdirectories that defined a `project`.
+# * `SENTRY_SOURCE_DIR`: points to the directory of this `CMakeLists.txt` independent of whether it was added as a
+#                        subdirectory in another project or whether we access it from one of our subdirectories.
+set(SENTRY_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 
 if(NOT CMAKE_C_STANDARD)
 	set(CMAKE_C_STANDARD 11)
@@ -62,6 +71,7 @@ option(SENTRY_BUILD_EXAMPLES "Build sentry-native example(s)" "${SENTRY_MAIN_PRO
 
 option(SENTRY_LINK_PTHREAD "Link platform threads library" ON)
 if(SENTRY_LINK_PTHREAD)
+	set(THREADS_PREFER_PTHREAD_FLAG ON)
 	find_package(Threads REQUIRED)
 endif()
 
@@ -276,7 +286,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "OS400")
 endif()
 
 if(SENTRY_TRANSPORT_CURL)
-	if(NOT CURL_FOUND) # Some other lib might bring libcurl already
+	if(NOT TARGET CURL::libcurl) # Some other lib might bring libcurl already
 		find_package(CURL REQUIRED COMPONENTS AsynchDNS)
 	endif()
 
@@ -284,7 +294,7 @@ if(SENTRY_TRANSPORT_CURL)
 endif()
 
 if(SENTRY_TRANSPORT_COMPRESSION)
-	if(NOT ZLIB_FOUND)
+	if(NOT TARGET ZLIB::ZLIB)
 		find_package(ZLIB REQUIRED)
 	endif()
 
@@ -368,6 +378,11 @@ if(WIN32)
 	endif()
 endif()
 
+include(cmake/utils.cmake)
+if (WIN32 AND SENTRY_BUILD_SHARED_LIBS)
+	sentry_add_version_resource(sentry "Client Library")
+endif()
+
 # handle platform libraries
 if(ANDROID)
 	set(_SENTRY_PLATFORM_LIBS "dl" "log")
@@ -387,11 +402,7 @@ if(SENTRY_LINK_PTHREAD)
 endif()
 
 # apply platform libraries to sentry library
-if(SENTRY_LIBRARY_TYPE STREQUAL "STATIC")
-	target_link_libraries(sentry PUBLIC ${_SENTRY_PLATFORM_LIBS})
-else()
-	target_link_libraries(sentry PRIVATE ${_SENTRY_PLATFORM_LIBS})
-endif()
+target_link_libraries(sentry PRIVATE ${_SENTRY_PLATFORM_LIBS})
 
 # suppress some errors and warnings for MinGW target
 if(MINGW)
@@ -477,6 +488,7 @@ if(SENTRY_BACKEND_CRASHPAD)
 elseif(SENTRY_BACKEND_BREAKPAD)
 	option(SENTRY_BREAKPAD_SYSTEM "Use system breakpad" OFF)
 	if(SENTRY_BREAKPAD_SYSTEM)
+		target_compile_definitions(sentry PRIVATE SENTRY_BREAKPAD_SYSTEM)
 		# system breakpad is using pkg-config, see `external/breakpad/breakpad-client.pc.in`
 		find_package(PkgConfig REQUIRED)
 		pkg_check_modules(BREAKPAD REQUIRED IMPORTED_TARGET breakpad-client)
@@ -585,6 +597,9 @@ if(SENTRY_BUILD_EXAMPLES)
 		set_target_properties(sentry_example PROPERTIES FOLDER ${SENTRY_FOLDER})
 	endif()
 
+	add_custom_command(TARGET sentry_example POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/minidump.dmp" "$<TARGET_FILE_DIR:sentry_example>/minidump.dmp")
+
 	add_test(NAME sentry_example COMMAND sentry_example)
 endif()
 
@@ -599,4 +614,9 @@ endif()
 if(SENTRY_BUILD_SHARED_LIBS)
 	target_link_libraries(sentry PRIVATE
 			"$<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:Android>>:-Wl,--build-id=sha1,--version-script=${PROJECT_SOURCE_DIR}/src/exports.map>")
+
+	# Support 16KB page sizes
+	target_link_libraries(sentry PRIVATE
+	    "$<$<PLATFORM_ID:Android>:-Wl,-z,max-page-size=16384>"
+	)
 endif()
