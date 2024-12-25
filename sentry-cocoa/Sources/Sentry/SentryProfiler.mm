@@ -56,7 +56,7 @@ sentry_manageTraceProfilerOnStartSDK(SentryOptions *options, SentryHub *hub)
 }
 
 @implementation SentryProfiler {
-    std::shared_ptr<SamplingProfiler> _samplingProfiler;
+    std::unique_ptr<SamplingProfiler> _samplingProfiler;
 }
 
 + (void)load
@@ -89,10 +89,12 @@ sentry_manageTraceProfilerOnStartSDK(SentryOptions *options, SentryHub *hub)
     [self.metricProfiler start];
 
 #    if SENTRY_HAS_UIKIT
-    [SentryDependencyContainer.sharedInstance.notificationCenterWrapper
-        addObserver:self
-           selector:@selector(backgroundAbort)
-               name:UIApplicationWillResignActiveNotification];
+    if (mode == SentryProfilerModeTrace) {
+        [SentryDependencyContainer.sharedInstance.notificationCenterWrapper
+            addObserver:self
+               selector:@selector(backgroundAbort)
+                   name:UIApplicationWillResignActiveNotification];
+    }
 #    endif // SENTRY_HAS_UIKIT
 
     return self;
@@ -163,7 +165,7 @@ sentry_manageTraceProfilerOnStartSDK(SentryOptions *options, SentryHub *hub)
 
     SentryProfilerState *const state = [[SentryProfilerState alloc] init];
     self.state = state;
-    _samplingProfiler = std::make_shared<SamplingProfiler>(
+    _samplingProfiler = std::make_unique<SamplingProfiler>(
         [state](auto &backtrace) {
             Backtrace backtraceCopy = backtrace;
             backtraceCopy.absoluteTimestamp

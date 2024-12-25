@@ -1,3 +1,4 @@
+#import "SentryBaggage.h"
 #import "SentryCrashThread.h"
 #import "SentryDependencyContainer.h"
 #import "SentryFrame.h"
@@ -13,6 +14,7 @@
 #import "SentrySwift.h"
 #import "SentryThreadInspector.h"
 #import "SentryTime.h"
+#import "SentryTraceContext.h"
 #import "SentryTraceHeader.h"
 #import "SentryTracer.h"
 
@@ -31,8 +33,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface
-SentrySpan ()
+@interface SentrySpan ()
 @end
 
 @implementation SentrySpan {
@@ -41,7 +42,6 @@ SentrySpan ()
     NSObject *_stateLock;
     BOOL _isFinished;
     uint64_t _startSystemTime;
-    LocalMetricsAggregator *localMetricsAggregator;
 #if SENTRY_HAS_UIKIT
     NSUInteger initTotalFrames;
     NSUInteger initSlowFrames;
@@ -259,7 +259,8 @@ SentrySpan ()
 
         CFTimeInterval framesDelay = [_framesTracker
                 getFramesDelay:_startSystemTime
-            endSystemTimestamp:SentryDependencyContainer.sharedInstance.dateProvider.systemTime];
+            endSystemTimestamp:SentryDependencyContainer.sharedInstance.dateProvider.systemTime]
+                                         .delayDuration;
 
         if (framesDelay >= 0) {
             [self setDataValue:@(framesDelay) forKey:@"frames.delay"];
@@ -297,12 +298,15 @@ SentrySpan ()
                                               sampled:self.sampled];
 }
 
-- (LocalMetricsAggregator *)getLocalMetricsAggregator
+// Getter for the computed property baggage
+- (nullable NSString *)baggageHttpHeader
 {
-    if (localMetricsAggregator == nil) {
-        localMetricsAggregator = [[LocalMetricsAggregator alloc] init];
-    }
-    return localMetricsAggregator;
+    return [[self.tracer.traceContext toBaggage] toHTTPHeaderWithOriginalBaggage:nil];
+}
+
+- (nullable SentryTraceContext *)traceContext
+{
+    return self.tracer.traceContext;
 }
 
 - (NSDictionary *)serialize
@@ -344,10 +348,6 @@ SentrySpan ()
 
     [mutableDictionary setValue:@(self.startTimestamp.timeIntervalSince1970)
                          forKey:@"start_timestamp"];
-
-    if (localMetricsAggregator != nil) {
-        mutableDictionary[@"_metrics_summary"] = [localMetricsAggregator serialize];
-    }
 
     @synchronized(_data) {
         NSMutableDictionary *data = _data.mutableCopy;

@@ -1,11 +1,438 @@
 # Changelog
 
+## 8.42.1
+
+### Fixes
+
+- Fixes Session replay screenshot provider crash (#4649)
+- Session Replay wrong clipping order (#4651)
+
+## 8.42.0
+
+### Features
+
+- Add in_foreground app context to transactions (#4561)
+- Add in_foreground app context to crash events (#4584)
+- Promote the option `performanceV2` from experimental to stable (#4564)
+
+### Fixes
+
+- Session replay touch tracking race condition (#4548)
+- Use `options.reportAccessibilityIdentifier` for Breadcrumbs and UIEvents (#4569) 
+- Session replay transformed view masking (#4529)
+- Load integration from same binary (#4541)
+- Masking for fast animations (#4574)
+- Fix GraphQL context for HTTP client error tracking (#4567)
+
+### Improvements
+
+- impr: Speed up getBinaryImages V2 (#4539). Follow up on (#4435)
+- Make SentryId Sendable (#4553)
+- Expose `Sentry._Hybrid` explicit module (#4440)
+- Track adoption of `enablePersistingTracesWhenCrashing` (#4587)
+
+## 8.42.0-beta.2
+
+### Fixes
+
+- Fix GraphQL context for HTTP client error tracking (#4567)
+
+### Improvements
+
+- Track adoption of `enablePersistingTracesWhenCrashing` (#4587)
+
+## 8.42.0-beta.1
+
+### Features
+
+- Add in_foreground app context to transactions (#4561)
+- Add in_foreground app context to crash events (#4584)
+- Promote the option `performanceV2` from experimental to stable (#4564)
+
+### Fixes
+
+- Session replay touch tracking race condition (#4548)
+- Use `options.reportAccessibilityIdentifier` for Breadcrumbs and UIEvents (#4569) 
+- Session replay transformed view masking (#4529)
+- Load integration from same binary (#4541)
+- Masking for fast animations #4574
+
+
+### Improvements
+
+- impr: Speed up getBinaryImages V2 (#4539). Follow up on (#4435)
+- Make SentryId Sendable (#4553)
+- Expose `Sentry._Hybrid` explicit module (#4440)
+
+## 8.41.0
+
+### Features
+
+- Transactions for crashes (#4504): Finish the transaction bound to the scope when the app crashes. This __experimental__ feature is disabled by default. You can enable it via the option `enablePersistingTracesWhenCrashing`.
+
+### Fixes
+
+- Keep PropagationContext when cloning scope (#4518)
+- UIViewController with Xcode 16 in debug (#4523). The Xcode 16 build setting [ENABLE_DEBUG_DYLIB](https://developer.apple.com/documentation/xcode/build-settings-reference#Enable-Debug-Dylib-Support), which is turned on by default only in debug, could lead to missing UIViewController traces.
+- Concurrency crash with Swift 6 (#4512)
+- Make `Scope.span` fully thread safe (#4519)
+- Finish TTFD when not calling reportFullyDisplayed before binding a new transaction to the scope (#4526).
+- Session replay opacity animation masking (#4532)
+
+## 8.41.0-beta.1
+
+### Features
+
+- Transactions for crashes (#4504): Finish the transaction bound to the scope when the app crashes. This __experimental__ feature is disabled by default. You can enable it via the option `enablePersistingTracesWhenCrashing`.
+
+### Fixes
+
+- Keep PropagationContext when cloning scope (#4518)
+- UIViewController with Xcode 16 in debug (#4523). The Xcode 16 build setting [ENABLE_DEBUG_DYLIB](https://developer.apple.com/documentation/xcode/build-settings-reference#Enable-Debug-Dylib-Support), which is turned on by default only in debug, could lead to missing UIViewController traces.
+- Concurrency crash with Swift 6 (#4512)
+- Make `Scope.span` fully thread safe (#4519)
+- Finish TTFD when not calling reportFullyDisplayed before binding a new transaction to the scope (#4526).
+- Session replay opacity animation masking (#4532)
+
+## 8.40.1
+
+### Fixes
+
+- Session replay masking not working inside scroll view (#4498)
+
+### Improvements
+
+- Add extra logs for UIViewControllerSwizzling (#4511)
+
+## 8.40.0
+
+### Features
+
+- Add option to report uncaught NSExceptions on macOS (#4471)
+- Build visionOS project with static Sentry SDK (#4462)
+- Too many navigation breadcrumbs for Session Replay (#4480)
+- Time-of-check time-of-use filesystem race condition (#4473)
+- Capture all touches with session replay (#4477)
+
+### Improvements
+
+- Improve frames tracker performance (#4469)
+- Log a warning when dropping envelopes due to rate-limiting (#4463)
+- Expose `SentrySessionReplayIntegration-Hybrid.h` as `private` (#4486)
+- Stops session replay if rate limiting is activated (#4496)
+- Add `maskedViewClasses` and `unmaskedViewClasses` to SentryReplayOptions init via dict (#4492)
+- Add `quality` to SentryReplayOptions init via dict (#4495)
+
+### Fixes
+
+- Masking text with transparent text color (#4499)
+
+## 8.39.0
+
+### Removal of Experimental API
+
+- Remove the deprecated experimental Metrics API (#4406): [Learn more](https://sentry.zendesk.com/hc/en-us/articles/26369339769883-Metrics-Beta-Coming-to-an-End)
+
+### Features
+
+- feat: API to manually start/stop Session Replay (#4414)
+- Custom redact modifier for SwiftUI (#4362, #4392)
+- Track usage of appHangTrackingV2 (#4445)
+- AppHangV2 detection (#4379) Add a new algorithm for detecting app hangs that differentiates between fully blocking and non-fully blocking app hangs. Read more in-depth in our [docs](https://docs.sentry.io/platforms/apple/guides/ios/configuration/app-hangs/#app-hangs-v2).
+
+### Fixes
+
+- Edge case for swizzleClassNameExclude (#4405): Skip creating transactions for UIViewControllers ignored for swizzling via the option `swizzleClassNameExclude`.
+- Add TTID/TTFD spans when loadView gets skipped (#4415)
+- Finish TTID correctly when viewWillAppear is skipped (#4417)
+- Swizzling RootUIViewController if ignored by `swizzleClassNameExclude` (#4407)
+- Data race in SentrySwizzleInfo.originalCalled (#4434)
+- Delete old session replay files (#4446)
+- Thread running at user-initiated quality-of-service for session replay (#4439)
+- Don't create transactions for unused UIViewControllers (#4448)
+
+### Improvements
+
+- Serializing profile on a BG Thread (#4377) to avoid potentially slightly blocking the main thread.
+- Session Replay performance for SwiftUI (#4419)
+- Speed up getBinaryImages (#4435) for finishing transactions and capturing events
+- Align SDK dispatch queue names (#4442) to start with `io.sentry`
+- Use UInts in envelope deserialization (#4441)
+- Make `SentrySDK.replay.start()` thread safe (#4455)
+
+## 8.39.0-beta.1
+
+### Removal of Experimental API
+
+- Remove the deprecated experimental Metrics API (#4406): [Learn more](https://sentry.zendesk.com/hc/en-us/articles/26369339769883-Metrics-Beta-Coming-to-an-End)
+
+### Features
+
+- feat: API to manually start/stop Session Replay (#4414)
+- Custom redact modifier for SwiftUI (#4362, #4392)
+- Track usage of appHangTrackingV2 (#4445)
+- AppHangV2 detection (#4379) Add a new algorithm for detecting app hangs that differentiates between fully blocking and non-fully blocking app hangs. Read more in-depth in our [docs](https://docs.sentry.io/platforms/apple/guides/ios/configuration/app-hangs/#app-hangs-v2).
+
+### Fixes
+
+- Edge case for swizzleClassNameExclude (#4405): Skip creating transactions for UIViewControllers ignored for swizzling via the option `swizzleClassNameExclude`.
+- Add TTID/TTFD spans when loadView gets skipped (#4415)
+- Finish TTID correctly when viewWillAppear is skipped (#4417)
+- Swizzling RootUIViewController if ignored by `swizzleClassNameExclude` (#4407)
+- Data race in SentrySwizzleInfo.originalCalled (#4434)
+- Delete old session replay files (#4446)
+- Thread running at user-initiated quality-of-service for session replay (#4439)
+- Don't create transactions for unused UIViewControllers (#4448)
+
+### Improvements
+
+- Serializing profile on a BG Thread (#4377) to avoid potentially slightly blocking the main thread.
+- Session Replay performance for SwiftUI (#4419)
+- Speed up getBinaryImages (#4435) for finishing transactions and capturing events
+- Align SDK dispatch queue names (#4442) to start with `io.sentry`
+- Use UInts in envelope deserialization (#4441)
+- Make `SentrySDK.replay.start()` thread safe (#4455)
+
+## 8.38.0
+
+### Features
+
+- Added breadcrumb.origin private field (#4358)
+- Custom redact modifier for SwiftUI (#4362)
+- Add support for arm64e (#3398)
+- Add mergeable libraries support to dynamic libraries (#4381)
+
+### Improvements
+
+- Speed up HTTP tracking for multiple requests in parallel (#4366)
+- Slightly speed up SentryInAppLogic (#4370)
+- Rename session replay `redact` options and APIs to `mask` (#4373)
+- Stop canceling timer for manual transactions (#4380)
+
+### Fixes
+
+- Fix the versioning to support app release with Beta versions (#4368)
+- Linking ongoing trace to crash event (#4393)
+
+## 8.38.0-beta.1
+
+### Features
+
+- Added breadcrumb.origin private field (#4358)
+- Custom redact modifier for SwiftUI (#4362)
+- Add support for arm64e (#3398)
+- Add mergeable libraries support to dynamic libraries (#4381)
+
+### Improvements
+
+- Speed up HTTP tracking for multiple requests in parallel (#4366)
+- Slightly speed up SentryInAppLogic (#4370)
+- Rename session replay `redact` options and APIs to `mask` (#4373)
+- Stop canceling timer for manual transactions (#4380)
+
+### Fixes
+
+- Fix the versioning to support app release with Beta versions (#4368)
+- Linking ongoing trace to crash event (#4393)
+
+## 8.37.0
+
+### Features
+
+- Added `thermal_state` to device context (#4305)
+- Send envelopes that cannot be cached to disk (#4294)
+
+### Refactoring
+
+- Moved session replay API to `SentrySDK.replay` (#4326)
+- Changed default session replay quality to `medium` (#4326)
+
+### Fixes
+
+- Resumes replay when the app becomes active (#4303)
+- Session replay redact view with transformation (#4308)
+- Correct redact UIView with higher zPosition (#4309)
+- Don't redact clipped views (#4325)
+- Session replay for crash not created because of a race condition (#4314)
+- Double-quoted include, expected angle-bracketed instead (#4298)
+- Discontinue use of NSApplicationSupportDirectory in favor of NSCachesDirectory (#4335)
+- Safe guard `strncpy` usage (#4336)
+- Stop using `redactAllText` as an indicator tha redact is enabled (#4327)
+
+### Improvements
+
+- Avoid extra work when storing invalid envelopes (#4337)
+
+## 8.37.0-beta.1
+
+### Features
+
+- Added `thermal_state` to device context (#4305)
+- Send envelopes that cannot be cached to disk (#4294)
+
+### Refactoring
+
+- Moved session replay API to `SentrySDK.replay` (#4326)
+- Changed default session replay quality to `medium` (#4326)
+
+### Fixes
+
+- Resumes replay when the app becomes active (#4303)
+- Session replay redact view with transformation (#4308)
+- Correct redact UIView with higher zPosition (#4309)
+- Don't redact clipped views (#4325)
+- Session replay for crash not created because of a race condition (#4314)
+- Double-quoted include, expected angle-bracketed instead (#4298)
+- Discontinue use of NSApplicationSupportDirectory in favor of NSCachesDirectory (#4335)
+- Safe guard `strncpy` usage (#4336)
+- Stop using `redactAllText` as an indicator tha redact is enabled (#4327)
+
+### Improvements
+
+- Avoid extra work when storing invalid envelopes (#4337)
+
+## 8.36.0
+
+### Features
+
+- Continuous mode profiling (see `SentrySDK.startProfiler` and `SentryOptions.profilesSampleRate`) (#4010)
+
+### Fixes
+
+- Proper redact SR during animation (#4289)
+
+## 8.35.1
+
+### Fixes
+
+- Crash when reading corrupted envelope (#4297)
+
+## 8.35.0
+
+### Features
+
+- Expose span baggage API (#4207)
+
+### Fixes
+
+- Fix `SIGABRT` when modifying scope user (#4274)
+- Crash during SDK initialization due to corrupted envelope (#4291)
+  - Reverts [#4219](https://github.com/getsentry/sentry-cocoa/pull/4219) as potential fix
+
+## 8.34.0
+
+### Features
+
+- Pause replay in session mode when offline (#4264)
+- Add replay quality option for Objective-C (#4267)
+
+### Fixes
+
+- Session replay not redacting buttons and other non UILabel texts (#4277)
+- Rarely reporting too long frame delays (#4278) by fixing a race condition in the frames tracking logic.
+- Crash deserializing empty envelope length>0 (#4281]
+- Guard dereferencing of stack frame pointer in SentryBacktrace ([#4268](https://github.com/getsentry/sentry-cocoa/pull/4268))
+
+## 8.33.0
+
+### Note: Due to a bug (#4280) introduced in this release, we recommend upgrading to [8.35.0](https://github.com/getsentry/sentry-cocoa/releases/tag/8.35.0) or newer.
+
+---
+
+This release fixes a bug (#4230) that we introduced with a refactoring (#4101) released in [8.30.1](https://github.com/getsentry/sentry-cocoa/releases/tag/8.30.1).
+This bug caused unhandled/crash events to have the unhandled property and mach info missing, which is required for release health to show events in the unhandled tab. It's essential to mention that this bug **doesn't impact** release health statistics, such as crash-free session or user rates.
+
+### Features
+
+- Support orientation change for session replay (#4194)
+- Replay for crashes (#4171)
+- Redact web view from replay (#4203)
+- Add beforeCaptureViewHierarchy callback (#4210)
+- Rename session replay `errorSampleRate` property to `onErrorSampleRate` (#4218)
+- Add options to redact or ignore view for Replay (#4228)
+
+### Fixes
+
+- Skip UI crumbs when target or sender is nil (#4211)
+- Guard FramesTracker start and stop (#4224)
+- Long-lasting TTID/TTFD spans (#4225). Avoid long TTID spans when the FrameTracker isn't running, which is the case when the app is in the background.
+- Missing mach info for crash reports (#4230)
+- Crash reports not generated on visionOS (#4229)
+- Don’t force cast to `NSComparisonPredicate` in TERNARY operator (#4232)
+- Fix accessing UI API on bg thread in enrichScope (#4245)
+- EXC_BAD_ACCESS in SentryMetricProfiler (#4242)
+- Missing '#include <sys/_types/_ucontext64.h>' (#4244)
+- Rare flush timeout when called in tight loop (#4257)
+
+### Improvements
+
+- Reduce memory usage of storing envelopes (#4219)
+- Skip enriching scope when nil (#4243)
+
+## 8.32.0
+
+### Features
+
+- Add `reportAccessibilityIdentifier` option (#4183)
+- Record dropped spans (#4172)
+
+### Fixes
+
+- Session replay crash when writing the replay (#4186)
+
+### Features
+
+- Collect only unique UIWindow references (#4159)
+
+### Deprecated
+
+- options.enableTracing was deprecated. Use options.tracesSampleRate or options.tracesSampler instead. (#4182)
+
+## 8.31.1
+
+### Fixes
+
+- Session replay video duration from seconds to milliseconds (#4163)
+
+## 8.31.0
+
+### Features
+
+- Include the screen names in the session replay (#4126)
+
+### Fixes
+
+- Properly handle invalid value for `NSUnderlyingErrorKey` (#4144)
+- Session replay in buffer mode not working (#4160)
+
+## 8.30.1
+
+### Fixes
+
+- UIKitless configurations now produce a module with a different name (#4140)
+- Sentry Replay Serialized Breadcrumbs include level name ([#4141](https://github.com/getsentry/sentry-cocoa/pull/4141))
+
+## 8.30.0
+
+### Features
+
+- Restart replay session with mobile session (#4085)
+- Add pause and resume AppHangTracking API (#4077). You can now pause and resume app hang tracking with `SentrySDK.pauseAppHangTracking()` and `SentrySDK.resumeAppHangTracking()`.
+- Add `beforeSendSpan` callback (#4095)
+
+### Fixes
+
+- `storeEnvelope` ends session for unhandled errors (#4073)
+- Deprecate `SentryUser.segment`(#4092). Please remove usages of this property. We will remove it in the next major.
+- Double-quoted include in framework header (#4115)
+- Sentry Replay Network details should be available without Tracing (#4091)
+
 ## 8.29.1
 
 ### Fixes
 
 - Fix potential deadlock in app hang detection (#4063)
-- Swizzling of view controllers `loadView` that don`t implement `loadView` (#4071)
+- Swizzling of view controllers `loadView` that don't implement `loadView` (#4071)
 
 ## 8.29.0
 
@@ -75,7 +502,7 @@ to receive SIGTERM events, set the option `enableSigtermReporting = true`.
 
 ### Features
 
-The following two features, disabled by default, were mistakenly added to the release. We usually only add features in minor releases. 
+The following two features, disabled by default, were mistakenly added to the release. We usually only add features in minor releases.
 
 - Add option to use own NSURLSession for transport (#3811)
 - Support sending GraphQL operation names in HTTP breadcrumbs (#3931)
@@ -96,9 +523,9 @@ The following two features, disabled by default, were mistakenly added to the re
 
 - Remove not needed lock for logging (#3934)
 - Session replay Improvements (#3877)
-  - Use image average color and text font color to redact session replay 
+  - Use image average color and text font color to redact session replay
   - Removed iOS 16 restriction from session replay
-  - Performance improvement 
+  - Performance improvement
 
 ## 8.25.0
 
@@ -110,7 +537,7 @@ The following two features, disabled by default, were mistakenly added to the re
 ### Fixes
 
 - Crash due to a background call to -[UIApplication applicationState] (#3855)
-- Save framework without UIKit/AppKit as Github Asset for releases (#3858) 
+- Save framework without UIKit/AppKit as Github Asset for releases (#3858)
 - Fix crash associated with runtime collision in global C function names (#3862)
 - Remove wrong error log in SentryCoreDataTracker (#3894)
 - Don't transmit device boot time in envelopes enriched with crash data (#3912, #3916)
@@ -129,7 +556,7 @@ The following two features, disabled by default, were mistakenly added to the re
 ### Fixes
 
 - Crash due to a background call to -[UIApplication applicationState] (#3855)
-- Save framework without UIKit/AppKit as Github Asset for releases (#3858) 
+- Save framework without UIKit/AppKit as Github Asset for releases (#3858)
 - Fix crash associated with runtime collision in global C function names (#3862)
 - Remove wrong error log in SentryCoreDataTracker (#3894)
 
@@ -188,7 +615,7 @@ more about how to use the Metrics API.
 
 ## 8.22.1
 
-### Fixes 
+### Fixes
 
 - Checksum error when resolving the SDK via SPM (#3760)
 
@@ -265,7 +692,7 @@ information retrieved via `NSFileSystemFreeSize` and `NSFileSystemSize` off a de
 - Add visionOS as device family (#3548)
 - Add VisionOS Support for Carthage (#3565)
 
-### Fixes 
+### Fixes
 
 - Move header reference out of "extern C" (#3538)
 - Clarify FramesTracker log message (#3570)
@@ -314,7 +741,7 @@ information retrieved via `NSFileSystemFreeSize` and `NSFileSystemSize` off a de
 
 ## 8.17.1
 
-### Fixes 
+### Fixes
 
 - Crash when UINavigationController doesn't have rootViewController (#3455)
 - Crash when synchronizing invalid JSON breadcrumbs to SentryWatchdogTermination (#3458)
@@ -326,7 +753,7 @@ information retrieved via `NSFileSystemFreeSize` and `NSFileSystemSize` off a de
 
 ### Features
 
-- SwiftUI support is no longer in Beta (#3441) 
+- SwiftUI support is no longer in Beta (#3441)
 
 ## 8.16.1
 
@@ -486,7 +913,7 @@ and [MXCPUExceptionDiagnostic](https://developer.apple.com/documentation/metrick
 ## 8.9.4
 
 ### Fixes
- 
+
 - Remove linker settings from Package.swift (#3188)
 - Free memory returned by backtrace_symbols() in debug builds ([#3202](https://github.com/getsentry/sentry-cocoa/pull/3202))
 
@@ -613,7 +1040,7 @@ For the Swift error above Sentry displays:
 [Customized error descriptions](https://docs.sentry.io/platforms/apple/usage/#customizing-error-descriptions) have precedence over this feature.
 This change has no impact on grouping of the issues in Sentry.
 
-### Fixes 
+### Fixes
 
 - Propagate span when copying scope (#2952)
 - Remove "/" from crash report file name (#3005)
@@ -628,7 +1055,7 @@ This change has no impact on grouping of the issues in Sentry.
 
 - Create User and Breadcrumb from map (#2820)
 
-### Fixes 
+### Fixes
 
 - Improved performance serializing profiling data (#2863)
 - Possible crash in Core Data tracking (#2865)
@@ -662,9 +1089,9 @@ The `stitchAsyncCode` experimental option has been removed from `SentryOptions` 
 - Add `name` and `geo` to User (#2710)
 
 ### Fixes
- 
+
 - Correctly track and send GPU frame render data in profiles (#2823)
-- Xcode 14.3 compiling issue regarding functions declaration with no prototype (#2852) 
+- Xcode 14.3 compiling issue regarding functions declaration with no prototype (#2852)
 
 ## 8.3.3
 
@@ -690,7 +1117,7 @@ The `stitchAsyncCode` experimental option has been removed from `SentryOptions` 
 
 ## 8.3.1
 
-### Fixes 
+### Fixes
 
 - Stop using UIScreen.main (#2762)
 - Profile timestamp alignment with transactions (#2771) and app start spans (#2772)
@@ -756,7 +1183,7 @@ This change might mark 3rd party library frames as in-app, which the SDK previou
 
 ### Features
 
-This version adds a dependency on Swift. 
+This version adds a dependency on Swift.
 We renamed the default branch from `master` to `main`. We are going to keep the `master` branch for backwards compatibility for package managers pointing to the `master` branch.
 
 ### Features
@@ -772,7 +1199,7 @@ We renamed the default branch from `master` to `main`. We are going to keep the 
 - Enable CaptureFailedRequests by default (#2507)
 - Support the [`SENTRY_DSN` environment variable](https://docs.sentry.io/platforms/apple/guides/macos/configuration/options/#dsn) on macOS (#2534)
 - Experimental MetricKit integration (#2519) for
-  - [MXHangDiagnostic](https://developer.apple.com/documentation/metrickit/mxhangdiagnostic) 
+  - [MXHangDiagnostic](https://developer.apple.com/documentation/metrickit/mxhangdiagnostic)
   - [MXDiskWriteExceptionDiagnostic](https://developer.apple.com/documentation/metrickit/mxdiskwriteexceptiondiagnostic)
   - [MXCPUExceptionDiagnostic](https://developer.apple.com/documentation/metrickit/mxcpuexceptiondiagnostic)
 - Add a timeout for auto-generated transactions (#2535)
@@ -799,7 +1226,7 @@ We renamed the default branch from `master` to `main`. We are going to keep the 
 - Make `SpanProtocol.data` non nullable (#2409)
 - Mark `- [SpanProtocol setExtraValue:forKey:]` as deprecated (#2413)
 - Make SpanContext immutable (#2408)
-    - Remove tags from SpanContext 
+    - Remove tags from SpanContext
     - Remove context property from SentrySpan
 - Bump minimum supported OS versions to macOS 10.13, iOS 11, tvOS 11, and watchOS 4 (#2414)
 - Make public APIs Swift friendly
@@ -812,8 +1239,8 @@ We renamed the default branch from `master` to `main`. We are going to keep the 
     - Remove `SentryScope.apply(to:maxBreadcrumb:)` (#2416)
     - Remove `- [SentryOptions initWithDict:didFailWithError:]` (#2404)
     - Remove `- [SentryOptions sdkInfo]` (#2404)
-    - Make SentrySession and SentrySDKInfo internal (#2451)  
-- Marks App hang's event stacktrace snapshot as true (#2441) 
+    - Make SentrySession and SentrySDKInfo internal (#2451)
+- Marks App hang's event stacktrace snapshot as true (#2441)
 - Enable user interaction tracing by default (#2442)
 - Remove default attachment content type (#2443)
 - Rename APM tracking feature flags to tracing (#2450)

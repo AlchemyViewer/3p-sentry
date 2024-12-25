@@ -1,4 +1,3 @@
-import Nimble
 @testable import Sentry
 import SentryTestUtils
 import XCTest
@@ -19,10 +18,10 @@ class SentryTransportInitializerTests: XCTestCase {
     func testDefault() throws {
         let options = try Options(dict: ["dsn": SentryTransportInitializerTests.dsnAsString])
     
-        let result = TransportInitializer.initTransports(options, sentryFileManager: fileManager, currentDateProvider: TestCurrentDateProvider())
-        expect(result.count) == 1
+        let result = TransportInitializer.initTransports(options, sentryFileManager: fileManager, rateLimits: SentryDependencyContainer.sharedInstance().rateLimits)
+        XCTAssertEqual(result.count, 1)
         
         let firstTransport = result.first
-        expect(firstTransport?.isKind(of: SentryHttpTransport.self)) == true
+        XCTAssertEqual(firstTransport?.isKind(of: SentryHttpTransport.self), true)
     }
 }

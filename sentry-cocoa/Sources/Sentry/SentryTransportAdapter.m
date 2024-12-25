@@ -7,8 +7,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface
-SentryTransportAdapter ()
+@interface SentryTransportAdapter ()
 
 @property (nonatomic, strong) NSArray<id<SentryTransport>> *transports;
 @property (nonatomic, strong) SentryOptions *options;
@@ -78,6 +77,21 @@ SentryTransportAdapter ()
     [self sendEnvelope:envelope];
 }
 
+- (void)storeEvent:(SentryEvent *)event traceContext:(nullable SentryTraceContext *)traceContext
+{
+    SentryEnvelopeItem *item = [[SentryEnvelopeItem alloc] initWithEvent:event];
+
+    SentryEnvelopeHeader *envelopeHeader = [[SentryEnvelopeHeader alloc] initWithId:event.eventId
+                                                                       traceContext:traceContext];
+
+    SentryEnvelope *envelope = [[SentryEnvelope alloc] initWithHeader:envelopeHeader
+                                                                items:@[ item ]];
+
+    for (id<SentryTransport> transport in self.transports) {
+        [transport storeEnvelope:envelope];
+    }
+}
+
 - (void)sendUserFeedback:(SentryUserFeedback *)userFeedback
 {
     SentryEnvelopeItem *item = [[SentryEnvelopeItem alloc] initWithUserFeedback:userFeedback];
@@ -99,6 +113,15 @@ SentryTransportAdapter ()
 {
     for (id<SentryTransport> transport in self.transports) {
         [transport recordLostEvent:category reason:reason];
+    }
+}
+
+- (void)recordLostEvent:(SentryDataCategory)category
+                 reason:(SentryDiscardReason)reason
+               quantity:(NSUInteger)quantity
+{
+    for (id<SentryTransport> transport in self.transports) {
+        [transport recordLostEvent:category reason:reason quantity:quantity];
     }
 }
 

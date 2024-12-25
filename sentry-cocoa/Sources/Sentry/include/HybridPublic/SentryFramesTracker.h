@@ -1,14 +1,23 @@
-#import "SentryDefines.h"
+#if __has_include(<Sentry/SentryDefines.h>)
+#    import <Sentry/SentryDefines.h>
+#else
+#    import "SentryDefines.h"
+#endif
 
 #if SENTRY_HAS_UIKIT
 
-#    import "SentryProfilingConditionals.h"
+#    if __has_include(<Sentry/SentryProfilingConditionals.h>)
+#        import <Sentry/SentryProfilingConditionals.h>
+#    else
+#        import "SentryProfilingConditionals.h"
+#    endif
 
 @class SentryDisplayLinkWrapper;
-@class SentryCurrentDateProvider;
+@protocol SentryCurrentDateProvider;
 @class SentryDispatchQueueWrapper;
 @class SentryNSNotificationCenterWrapper;
 @class SentryScreenFrames;
+@class SentryFramesDelayResult;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -32,7 +41,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface SentryFramesTracker : NSObject
 
 - (instancetype)initWithDisplayLinkWrapper:(SentryDisplayLinkWrapper *)displayLinkWrapper
-                              dateProvider:(SentryCurrentDateProvider *)dateProvider
+                              dateProvider:(id<SentryCurrentDateProvider>)dateProvider
                       dispatchQueueWrapper:(SentryDispatchQueueWrapper *)dispatchQueueWrapper
                         notificationCenter:(SentryNSNotificationCenterWrapper *)notificationCenter
                  keepDelayedFramesDuration:(CFTimeInterval)keepDelayedFramesDuration;
@@ -48,12 +57,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)start;
 - (void)stop;
 
-/*
- * Returns the frames delay for the passed time period. If the method can't calculate the frames
- * delay, it returns -1.
- */
-- (CFTimeInterval)getFramesDelay:(uint64_t)startSystemTimestamp
-              endSystemTimestamp:(uint64_t)endSystemTimestamp;
+- (SentryFramesDelayResult *)getFramesDelay:(uint64_t)startSystemTimestamp
+                         endSystemTimestamp:(uint64_t)endSystemTimestamp;
 
 - (void)addListener:(id<SentryFramesTrackerListener>)listener;
 

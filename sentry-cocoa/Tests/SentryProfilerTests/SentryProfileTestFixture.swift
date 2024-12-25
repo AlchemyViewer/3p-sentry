@@ -47,6 +47,19 @@ class SentryProfileTestFixture {
         SentryDependencyContainer.sharedInstance().timerFactory = timeoutTimerFactory
         SentryDependencyContainer.sharedInstance().notificationCenterWrapper = notificationCenter
         
+        let image = DebugMeta()
+        image.name = "sentrytest"
+        image.imageAddress = "0x0000000105705000"
+        image.imageVmAddress = "0x0000000105705000"
+        image.codeFile = "codeFile"
+        image.debugID = "debugID"
+        image.imageSize = 100
+        image.type = "macho"
+        
+        let debugImageProvider = TestDebugImageProvider()
+        debugImageProvider.debugImages = [image]
+        SentryDependencyContainer.sharedInstance().debugImageProvider = debugImageProvider
+        
         mockMetrics = MockMetric()
         systemWrapper.overrides.cpuUsage = mockMetrics.cpuUsage
         systemWrapper.overrides.memoryFootprintBytes = mockMetrics.memoryFootprint
@@ -78,7 +91,7 @@ class SentryProfileTestFixture {
     }
     
     /// Advance the mock date provider, start a new transaction and return its handle.
-    func newTransaction(testingAppLaunchSpans: Bool = false, automaticTransaction: Bool = false, idleTimeout: TimeInterval? = nil, expectedProfileMetrics: MockMetric = MockMetric()) throws -> SentryTracer {
+    func newTransaction(testingAppLaunchSpans: Bool = false, automaticTransaction: Bool = false, idleTimeout: TimeInterval? = nil) throws -> SentryTracer {
         let operation = testingAppLaunchSpans ? SentrySpanOperationUILoad : transactionOperation
         
         if automaticTransaction {

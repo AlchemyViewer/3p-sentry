@@ -1,5 +1,6 @@
 #import "SentrySDK.h"
 #import "PrivateSentrySDKOnly.h"
+#import "SentryANRTrackingIntegration.h"
 #import "SentryAppStartMeasurement.h"
 #import "SentryAppStateManager.h"
 #import "SentryBinaryImageCache.h"
@@ -13,14 +14,15 @@
 #import "SentryHub+Private.h"
 #import "SentryInternalDefines.h"
 #import "SentryLog.h"
+#import "SentryLogC.h"
 #import "SentryMeta.h"
 #import "SentryOptions+Private.h"
 #import "SentryProfilingConditionals.h"
+#import "SentryReplayApi.h"
 #import "SentrySamplingContext.h"
 #import "SentryScope.h"
 #import "SentrySerialization.h"
 #import "SentrySwift.h"
-#import "SentryThreadWrapper.h"
 #import "SentryTransactionContext.h"
 
 #if TARGET_OS_OSX
@@ -37,8 +39,7 @@
 #    import "SentryProfiler+Private.h"
 #endif // SENTRY_TARGET_PROFILING_SUPPORTED
 
-@interface
-SentrySDK ()
+@interface SentrySDK ()
 
 @property (class) SentryHub *currentHub;
 
@@ -94,7 +95,15 @@ static NSDate *_Nullable startTimestamp = nil;
         return startOption;
     }
 }
-
+#if SENTRY_TARGET_REPLAY_SUPPORTED
++ (SentryReplayApi *)replay
+{
+    static SentryReplayApi *replay;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ replay = [[SentryReplayApi alloc] init]; });
+    return replay;
+}
+#endif
 /** Internal, only needed for testing. */
 + (void)setCurrentHub:(nullable SentryHub *)hub
 {
@@ -218,28 +227,33 @@ static NSDate *_Nullable startTimestamp = nil;
 
     SentryScope *scope
         = options.initialScope([[SentryScope alloc] initWithMaxBreadcrumbs:options.maxBreadcrumbs]);
-    // The Hub needs to be initialized with a client so that closing a session
-    // can happen.
-    SentryHub *hub = [[SentryHub alloc] initWithClient:newClient andScope:scope];
-    [SentrySDK setCurrentHub:hub];
-    SENTRY_LOG_DEBUG(@"SDK initialized! Version: %@", SentryMeta.versionString);
 
     SENTRY_LOG_DEBUG(@"Dispatching init work required to run on main thread.");
-    [SentryThreadWrapper onMainThread:^{
+    [SentryDependencyContainer.sharedInstance.dispatchQueueWrapper dispatchAsyncOnMainQueue:^{
         SENTRY_LOG_DEBUG(@"SDK main thread init started...");
+
+        // The UIDeviceWrapper needs to start before the Hub, because the Hub
+        // enriches the scope, which calls the UIDeviceWrapper.
+#if SENTRY_HAS_UIKIT
+        [SentryDependencyContainer.sharedInstance.uiDeviceWrapper start];
+#endif // TARGET_OS_IOS && SENTRY_HAS_UIKIT
+
+        // The Hub needs to be initialized with a client so that closing a session
+        // can happen.
+        SentryHub *hub = [[SentryHub alloc] initWithClient:newClient andScope:scope];
+        [SentrySDK setCurrentHub:hub];
 
         [SentryCrashWrapper.sharedInstance startBinaryImageCache];
         [SentryDependencyContainer.sharedInstance.binaryImageCache start];
 
         [SentrySDK installIntegrations];
-#if TARGET_OS_IOS && SENTRY_HAS_UIKIT
-        [SentryDependencyContainer.sharedInstance.uiDeviceWrapper start];
-#endif // TARGET_OS_IOS && SENTRY_HAS_UIKIT
 
 #if SENTRY_TARGET_PROFILING_SUPPORTED
         sentry_manageTraceProfilerOnStartSDK(options, hub);
 #endif // SENTRY_TARGET_PROFILING_SUPPORTED
     }];
+
+    SENTRY_LOG_DEBUG(@"SDK initialized! Version: %@", SentryMeta.versionString);
 }
 
 + (void)startWithConfigureOptions:(void (^)(SentryOptions *options))configureOptions
@@ -383,14 +397,17 @@ static NSDate *_Nullable startTimestamp = nil;
  */
 + (void)storeEnvelope:(SentryEnvelope *)envelope
 {
-    if (nil != [SentrySDK.currentHub getClient]) {
-        [[SentrySDK.currentHub getClient] storeEnvelope:envelope];
-    }
+    [SentrySDK.currentHub storeEnvelope:envelope];
 }
 
 + (void)captureUserFeedback:(SentryUserFeedback *)userFeedback
 {
     [SentrySDK.currentHub captureUserFeedback:userFeedback];
+}
+
++ (void)showUserFeedbackForm
+{
+    // TODO: implement
 }
 
 + (void)addBreadcrumb:(SentryBreadcrumb *)crumb
@@ -443,8 +460,31 @@ static NSDate *_Nullable startTimestamp = nil;
         return;
     }
     SentryOptions *options = [SentrySDK.currentHub getClient].options;
-    for (NSString *integrationName in [SentrySDK.currentHub getClient].options.integrations) {
-        Class integrationClass = NSClassFromString(integrationName);
+    NSMutableArray<NSString *> *integrationNames =
+        [SentrySDK.currentHub getClient].options.integrations.mutableCopy;
+
+    NSArray<Class> *defaultIntegrations = SentryOptions.defaultIntegrationClasses;
+
+    // Since 8.22.0, we use a precompiled XCFramework for SPM, which can lead to Sentry's
+    // definition getting duplicated in the app with a warning “SentrySDK is defined in both
+    // ModuleA and ModuleB”. This doesn't happen when users use Sentry-Dynamic and
+    // when compiling Sentry from source via SPM. Due to the duplication, some users didn't
+    // see any crashes reported to Sentry cause the SentryCrashReportSink couldn't find
+    // a hub bound to the SentrySDK, and it dropped the crash events. This problem
+    // is fixed now by using a dictionary that links the classes with their names
+    // so we can quickly check whether that class is in the option integrations collection.
+    // We cannot load the class itself with NSClassFromString because doing so may load a class
+    // that was duplicated in another module, leading to undefined behavior.
+    NSMutableDictionary<NSString *, Class> *integrationDictionary =
+        [[NSMutableDictionary alloc] init];
+
+    for (Class integrationClass in defaultIntegrations) {
+        integrationDictionary[NSStringFromClass(integrationClass)] = integrationClass;
+    }
+
+    for (NSString *integrationName in integrationNames) {
+        Class integrationClass
+            = integrationDictionary[integrationName] ?: NSClassFromString(integrationName);
         if (nil == integrationClass) {
             SENTRY_LOG_ERROR(@"[SentryHub doInstallIntegrations] "
                              @"couldn't find \"%@\" -> skipping.",
@@ -469,6 +509,24 @@ static NSDate *_Nullable startTimestamp = nil;
 + (void)reportFullyDisplayed
 {
     [SentrySDK.currentHub reportFullyDisplayed];
+}
+
++ (void)pauseAppHangTracking
+{
+    SentryANRTrackingIntegration *anrTrackingIntegration
+        = (SentryANRTrackingIntegration *)[SentrySDK.currentHub
+            getInstalledIntegration:[SentryANRTrackingIntegration class]];
+
+    [anrTrackingIntegration pauseAppHangTracking];
+}
+
++ (void)resumeAppHangTracking
+{
+    SentryANRTrackingIntegration *anrTrackingIntegration
+        = (SentryANRTrackingIntegration *)[SentrySDK.currentHub
+            getInstalledIntegration:[SentryANRTrackingIntegration class]];
+
+    [anrTrackingIntegration resumeAppHangTracking];
 }
 
 + (void)flush:(NSTimeInterval)timeout
@@ -530,8 +588,10 @@ static NSDate *_Nullable startTimestamp = nil;
 {
     if (![currentHub.client.options isContinuousProfilingEnabled]) {
         SENTRY_LOG_WARN(
-            @"You must disable trace profiling by setting SentryOptions.profilesSampleRate to nil "
-            @"or 0 before using continuous profiling features.");
+            @"You must disable trace profiling by setting SentryOptions.profilesSampleRate and "
+            @"SentryOptions.profilesSampler to nil (which is the default initial value for both "
+            @"properties, so you can also just remove those lines from your configuration "
+            @"altogether) before attempting to start a continuous profiling session.");
         return;
     }
 
@@ -542,8 +602,10 @@ static NSDate *_Nullable startTimestamp = nil;
 {
     if (![currentHub.client.options isContinuousProfilingEnabled]) {
         SENTRY_LOG_WARN(
-            @"You must disable trace profiling by setting SentryOptions.profilesSampleRate to nil "
-            @"or 0 before using continuous profiling features.");
+            @"You must disable trace profiling by setting SentryOptions.profilesSampleRate and "
+            @"SentryOptions.profilesSampler to nil (which is the default initial value for both "
+            @"properties, so you can also just remove those lines from your configuration "
+            @"altogether) before attempting to stop a continuous profiling session.");
         return;
     }
 

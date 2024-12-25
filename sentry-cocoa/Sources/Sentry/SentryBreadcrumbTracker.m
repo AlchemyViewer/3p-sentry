@@ -25,8 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
 static NSString *const SentryBreadcrumbTrackerSwizzleSendAction
     = @"SentryBreadcrumbTrackerSwizzleSendAction";
 
-@interface
-SentryBreadcrumbTracker ()
+@interface SentryBreadcrumbTracker ()
 #if SENTRY_HAS_REACHABILITY
     <SentryReachabilityObserver>
 #endif // !TARGET_OS_WATCH
@@ -35,7 +34,9 @@ SentryBreadcrumbTracker ()
 
 @end
 
-@implementation SentryBreadcrumbTracker
+@implementation SentryBreadcrumbTracker {
+    BOOL _reportAccessibilityIdentifier;
+}
 
 #if SENTRY_HAS_REACHABILITY
 - (void)dealloc
@@ -43,6 +44,14 @@ SentryBreadcrumbTracker ()
     [SentryDependencyContainer.sharedInstance.reachability removeObserver:self];
 }
 #endif // !TARGET_OS_WATCH
+
+- (instancetype)initReportAccessibilityIdentifier:(BOOL)report
+{
+    if (self = [super init]) {
+        _reportAccessibilityIdentifier = report;
+    }
+    return self;
+}
 
 - (void)startWithDelegate:(id<SentryBreadcrumbDelegate>)delegate
 {
@@ -179,6 +188,10 @@ SentryBreadcrumbTracker ()
 #if SENTRY_HAS_UIKIT
 + (BOOL)avoidSender:(id)sender forTarget:(id)target action:(NSString *)action
 {
+    if (sender == nil || target == nil) {
+        return YES;
+    }
+
     if ([sender isKindOfClass:UITextField.self]) {
         // This is required to avoid creating breadcrumbs for every key pressed in a text field.
         // Textfield may invoke many types of event, in order to check if is a
@@ -208,7 +221,9 @@ SentryBreadcrumbTracker ()
             NSDictionary *data = nil;
             for (UITouch *touch in event.allTouches) {
                 if (touch.phase == UITouchPhaseCancelled || touch.phase == UITouchPhaseEnded) {
-                    data = [SentryBreadcrumbTracker extractDataFromView:touch.view];
+                    data = [SentryBreadcrumbTracker
+                                extractDataFromView:touch.view
+                        withAccessibilityIdentifier:self->_reportAccessibilityIdentifier];
                 }
             }
 
@@ -261,6 +276,7 @@ SentryBreadcrumbTracker ()
 }
 
 + (NSDictionary *)extractDataFromView:(UIView *)view
+          withAccessibilityIdentifier:(BOOL)includeIdentifier
 {
     NSMutableDictionary *result =
         @{ @"view" : [NSString stringWithFormat:@"%@", view] }.mutableCopy;
@@ -269,7 +285,8 @@ SentryBreadcrumbTracker ()
         [result setValue:[NSNumber numberWithInteger:view.tag] forKey:@"tag"];
     }
 
-    if (view.accessibilityIdentifier && ![view.accessibilityIdentifier isEqualToString:@""]) {
+    if (includeIdentifier && view.accessibilityIdentifier
+        && ![view.accessibilityIdentifier isEqualToString:@""]) {
         [result setValue:view.accessibilityIdentifier forKey:@"accessibilityIdentifier"];
     }
 

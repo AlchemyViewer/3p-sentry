@@ -8,11 +8,25 @@ import XCTest
 class SentryDebugImageProviderTests: XCTestCase {
     
     private class Fixture {
+        
+        let cache: SentryBinaryImageCache
+        
+        init() {
+            cache = SentryBinaryImageCache()
+        }
+        
         func getSut(images: [SentryCrashBinaryImage] = []) -> SentryDebugImageProvider {
             let imageProvider = TestSentryCrashBinaryImageProvider()
             imageProvider.imageCount = images.count
             imageProvider.binaryImage = images
-            return SentryDebugImageProvider(binaryImageProvider: imageProvider)
+            
+            cache.start()
+            for image in images {
+                var i = image
+                cache.binaryImageAdded(&i)
+            }
+            
+            return SentryDebugImageProvider(binaryImageProvider: imageProvider, binaryImageCache: cache)
         }
         
         func getTestImages() -> [SentryCrashBinaryImage] {
@@ -55,17 +69,23 @@ class SentryDebugImageProviderTests: XCTestCase {
     
     private let fixture = Fixture()
     
-    func testThreeImages() {
+    override func tearDown() {
+        fixture.cache.stop()
+        super.tearDown()
+    }
+    
+    @available(*, deprecated)
+    func testThreeImages() throws {
         let sut = fixture.getSut(images: fixture.getTestImages())
         let actual = sut.getDebugImagesCrashed(false)
         
         XCTAssertEqual(3, actual.count)
         
-        XCTAssertEqual("dyld_sim", actual[0].codeFile)
-        XCTAssertEqual("UIKit", actual[1].codeFile)
-        XCTAssertEqual("CoreData", actual[2].codeFile)
+        XCTAssertEqual("dyld_sim", try XCTUnwrap(actual.first).codeFile)
+        XCTAssertEqual("UIKit", try XCTUnwrap(actual.element(at: 1)).codeFile)
+        XCTAssertEqual("CoreData", try XCTUnwrap(actual.element(at: 2)).codeFile)
         
-        let debugMeta = actual[0]
+        let debugMeta = try XCTUnwrap(actual.first)
         XCTAssertEqual("84BAEBDA-AD1A-33F4-B35D-8A45F5DAF322", debugMeta.debugID)
         XCTAssertEqual("0x0000000105705000", debugMeta.imageAddress)
         XCTAssertEqual("0x00007fff51af0000", debugMeta.imageVmAddress)
@@ -73,21 +93,23 @@ class SentryDebugImageProviderTests: XCTestCase {
         XCTAssertEqual(352_256, debugMeta.imageSize)
     }
     
+    @available(*, deprecated)
     func testImageVmAddressIsZero() {
         let image = SentryDebugImageProviderTests.createSentryCrashBinaryImage(vmAddress: 0)
         
         let sut = fixture.getSut(images: [image])
         let actual = sut.getDebugImagesCrashed(false)
         
-        XCTAssertNil(actual[0].imageVmAddress)
+        XCTAssertNil(try XCTUnwrap(actual.first).imageVmAddress)
     }
     
+    @available(*, deprecated)
     func testImageSize() {
         func testWith(value: UInt64) {
             let image = SentryDebugImageProviderTests.createSentryCrashBinaryImage(size: value)
             let sut = fixture.getSut(images: [image])
             let actual = sut.getDebugImagesCrashed(false)
-            XCTAssertEqual(NSNumber(value: value), actual[0].imageSize)
+            XCTAssertEqual(NSNumber(value: value), try XCTUnwrap(actual.first).imageSize)
         }
         
         testWith(value: 0)
@@ -95,30 +117,33 @@ class SentryDebugImageProviderTests: XCTestCase {
         testWith(value: UINT64_MAX)
     }
     
-    func testImageAddress() {
-        func testWith(value: UInt64, expected: String) {
+    @available(*, deprecated)
+    func testImageAddress() throws {
+        func testWith(value: UInt64, expected: String) throws {
             let image = SentryDebugImageProviderTests.createSentryCrashBinaryImage(address: value)
             let sut = fixture.getSut(images: [image])
             let actual = sut.getDebugImagesCrashed(false)
             
             XCTAssertEqual(1, actual.count)
             
-            let debugMeta = actual[0]
+            let debugMeta = try XCTUnwrap(actual.first)
             XCTAssertEqual(expected, debugMeta.imageAddress)
         }
         
-        testWith(value: UINT64_MAX, expected: "0xffffffffffffffff")
-        testWith(value: 0, expected: "0x0000000000000000")
-        testWith(value: 0, expected: "0x0000000000000000")
-        testWith(value: 4_361_940_992, expected: "0x0000000103fdf000")
+        try testWith(value: UINT64_MAX, expected: "0xffffffffffffffff")
+        try testWith(value: 0, expected: "0x0000000000000000")
+        try testWith(value: 0, expected: "0x0000000000000000")
+        try testWith(value: 4_361_940_992, expected: "0x0000000103fdf000")
     }
     
+    @available(*, deprecated)
     func testNoImages() {
         let actual = fixture.getSut().getDebugImagesCrashed(false)
         
         XCTAssertEqual(0, actual.count)
     }
     
+    @available(*, deprecated)
     func testImagesForThreads() {
         let sut = fixture.getSut(images: fixture.getTestImages())
         
@@ -130,8 +155,8 @@ class SentryDebugImageProviderTests: XCTestCase {
         var actual = sut.getDebugImages(for: [thread], isCrash: false)
         
         XCTAssertEqual(actual.count, 1)
-        XCTAssertEqual(actual[0].codeFile, "dyld_sim")
-        XCTAssertEqual(actual[0].imageAddress, "0x0000000105705000")
+        XCTAssertEqual(try XCTUnwrap(actual.first).codeFile, "dyld_sim")
+        XCTAssertEqual(try XCTUnwrap(actual.first).imageAddress, "0x0000000105705000")
         
         let frame2 = Sentry.Frame()
         frame2.imageAddress = "0x00000001410b1a00"
@@ -142,17 +167,194 @@ class SentryDebugImageProviderTests: XCTestCase {
         actual = sut.getDebugImages(for: [thread], isCrash: false)
         
         XCTAssertEqual(actual.count, 2)
-        XCTAssertEqual(actual[0].codeFile, "UIKit")
-        XCTAssertEqual(actual[0].imageAddress, "0x00000001410b1a00")
+        XCTAssertEqual(try XCTUnwrap(actual.first).codeFile, "UIKit")
+        XCTAssertEqual(try XCTUnwrap(actual.first).imageAddress, "0x00000001410b1a00")
         
-        XCTAssertEqual(actual[1].codeFile, "CoreData")
-        XCTAssertEqual(actual[1].imageAddress, "0x000000017ca5e400")
+        XCTAssertEqual(try XCTUnwrap(actual.element(at: 1)).codeFile, "CoreData")
+        XCTAssertEqual(try XCTUnwrap(actual.element(at: 1)).imageAddress, "0x000000017ca5e400")
     }
     
+    @available(*, deprecated)
     func test_NoImage_ForThread_WithoutStackTrace() {
         let sut = fixture.getSut(images: fixture.getTestImages())
         let thread = SentryThread(threadId: NSNumber(value: 1))
         let actual = sut.getDebugImages(for: [thread], isCrash: false)
+        
+        XCTAssertEqual(actual.count, 0)
+    }
+    
+    func testGetDebugImagesFromCacheForThreads() throws {
+        let sut = fixture.getSut(images: fixture.getTestImages())
+        
+        let frame1 = Sentry.Frame()
+        frame1.imageAddress = "0x0000000105705000"
+        
+        let frame2 = Sentry.Frame()
+        frame2.imageAddress = "0x00000001410b1a00"
+        
+        let thread1 = SentryThread(threadId: NSNumber(value: 1))
+        thread1.stacktrace = SentryStacktrace(frames: [frame1, frame2], registers: [:])
+        
+        let thread2 = SentryThread(threadId: NSNumber(value: 2))
+        thread2.stacktrace = SentryStacktrace(frames: [frame2], registers: [:])
+        
+        let actual = sut.getDebugImagesFromCacheForThreads(threads: [thread1, thread2])
+        
+        XCTAssertEqual(actual.count, 2)
+        let image1 = try XCTUnwrap(actual.first)
+        
+        XCTAssertEqual(image1.debugID, "84BAEBDA-AD1A-33F4-B35D-8A45F5DAF322")
+        XCTAssertEqual(image1.type, SentryDebugImageType)
+        XCTAssertEqual(image1.imageVmAddress, "0x0000daf262294000")
+        XCTAssertEqual(image1.imageAddress, "0x00000001410b1a00")
+        XCTAssertEqual(image1.imageSize, 1_352_256)
+        XCTAssertEqual(image1.codeFile, "UIKit")
+        
+        let image2 = try XCTUnwrap(actual.last)
+        
+        XCTAssertEqual(image2.debugID, "84BAEBDA-AD1A-33F4-B35D-8A45F5DAF322")
+        XCTAssertEqual(image2.type, SentryDebugImageType)
+        XCTAssertEqual(image2.imageVmAddress, "0x00007fff51af0000")
+        XCTAssertEqual(image2.imageAddress, "0x0000000105705000")
+        XCTAssertEqual(image2.imageSize, 352_256)
+        XCTAssertEqual(image2.codeFile, "dyld_sim")
+    }
+    
+    func testGetDebugImagesFromCacheForFrames() throws {
+        let sut = fixture.getSut(images: fixture.getTestImages())
+        
+        let frame1 = Sentry.Frame()
+        frame1.imageAddress = "0x0000000105705000"
+        
+        let frame2 = Sentry.Frame()
+        frame2.imageAddress = "0x00000001410b1a00"
+        
+        let actual = sut.getDebugImagesFromCacheForFrames(frames: [frame1, frame2])
+        
+        XCTAssertEqual(actual.count, 2)
+        let image1 = try XCTUnwrap(actual.first)
+        
+        XCTAssertEqual(image1.debugID, "84BAEBDA-AD1A-33F4-B35D-8A45F5DAF322")
+        XCTAssertEqual(image1.type, SentryDebugImageType)
+        XCTAssertEqual(image1.imageVmAddress, "0x0000daf262294000")
+        XCTAssertEqual(image1.imageAddress, "0x00000001410b1a00")
+        XCTAssertEqual(image1.imageSize, 1_352_256)
+        XCTAssertEqual(image1.codeFile, "UIKit")
+        
+        let image2 = try XCTUnwrap(actual.last)
+        
+        XCTAssertEqual(image2.debugID, "84BAEBDA-AD1A-33F4-B35D-8A45F5DAF322")
+        XCTAssertEqual(image2.type, SentryDebugImageType)
+        XCTAssertEqual(image2.imageVmAddress, "0x00007fff51af0000")
+        XCTAssertEqual(image2.imageAddress, "0x0000000105705000")
+        XCTAssertEqual(image2.imageSize, 352_256)
+        XCTAssertEqual(image2.codeFile, "dyld_sim")
+    }
+    
+    func testGetDebugImagesFromCacheForFrames_GarbageImageAddress() throws {
+        let sut = fixture.getSut(images: fixture.getTestImages())
+        
+        let frame1 = Sentry.Frame()
+        frame1.imageAddress = "0x0000000105705000"
+        
+        let frame2 = Sentry.Frame()
+        frame2.imageAddress = "garbage"
+        
+        let actual = sut.getDebugImagesFromCacheForFrames(frames: [frame1, frame2])
+        
+        XCTAssertEqual(actual.count, 1)
+        let image = try XCTUnwrap(actual.first)
+        XCTAssertEqual(image.debugID, "84BAEBDA-AD1A-33F4-B35D-8A45F5DAF322")
+        XCTAssertEqual(image.type, SentryDebugImageType)
+        XCTAssertEqual(image.imageVmAddress, "0x00007fff51af0000")
+        XCTAssertEqual(image.imageAddress, "0x0000000105705000")
+        XCTAssertEqual(image.imageSize, 352_256)
+        XCTAssertEqual(image.codeFile, "dyld_sim")
+    }
+    
+    func testGetDebugImagesFromCacheForThreads_EmptyArray() throws {
+        let sut = fixture.getSut(images: fixture.getTestImages())
+        
+        let actual = sut.getDebugImagesFromCacheForThreads(threads: [])
+        
+        XCTAssertEqual(actual.count, 0)
+    }
+    
+    func testGetDebugImagesForImageAddressesFromCache() throws {
+        let sut = fixture.getSut(images: fixture.getTestImages())
+        
+        let imageAddress = "0x00000001410b1a00"
+        
+        let actual = sut.getDebugImagesForImageAddressesFromCache(imageAddresses: [imageAddress])
+        
+        XCTAssertEqual(actual.count, 1)
+        let image = try XCTUnwrap(actual.first)
+        
+        XCTAssertEqual(image.debugID, "84BAEBDA-AD1A-33F4-B35D-8A45F5DAF322")
+        XCTAssertEqual(image.type, SentryDebugImageType)
+        XCTAssertEqual(image.imageVmAddress, "0x0000daf262294000")
+        XCTAssertEqual(image.imageAddress, "0x00000001410b1a00")
+        XCTAssertEqual(image.imageSize, 1_352_256)
+        XCTAssertEqual(image.codeFile, "UIKit")
+    }
+    
+    func testGetDebugImagesForImageAddressesFromCache_GarbageImageAddress() throws {
+        let sut = fixture.getSut(images: fixture.getTestImages())
+        
+        let imageAddress = "garbage"
+        
+        let actual = sut.getDebugImagesForImageAddressesFromCache(imageAddresses: [imageAddress])
+
+        XCTAssertEqual(actual.count, 0)
+    }
+    
+    func testGetDebugImagesForImageAddressesFromCache_EmptyArray() throws {
+        let sut = fixture.getSut(images: fixture.getTestImages())
+        
+        let actual = sut.getDebugImagesForImageAddressesFromCache(imageAddresses: [])
+        
+        XCTAssertEqual(actual.count, 0)
+    }
+    
+    func testGetDebugImagesFromCache() throws {
+        let sut = fixture.getSut(images: fixture.getTestImages())
+        
+        let actual = sut.getDebugImagesFromCache()
+        
+        XCTAssertEqual(actual.count, 3)
+        
+        let coreDataImage = try XCTUnwrap(actual.first { $0.codeFile == "CoreData" })
+
+        XCTAssertEqual(coreDataImage.debugID, "84BAEBDA-AD1A-33F4-B35D-8A45F5DAF322")
+        XCTAssertEqual(coreDataImage.type, SentryDebugImageType)
+        XCTAssertEqual(coreDataImage.imageVmAddress, "0x000135e572a38000")
+        XCTAssertEqual(coreDataImage.imageAddress, "0x000000017ca5e400")
+        XCTAssertEqual(coreDataImage.imageSize, 900_256)
+        XCTAssertEqual(coreDataImage.codeFile, "CoreData")
+        
+        let uiKitImage = try XCTUnwrap(actual.first { $0.codeFile == "UIKit" })
+        
+        XCTAssertEqual(uiKitImage.debugID, "84BAEBDA-AD1A-33F4-B35D-8A45F5DAF322")
+        XCTAssertEqual(uiKitImage.type, SentryDebugImageType)
+        XCTAssertEqual(uiKitImage.imageVmAddress, "0x0000daf262294000")
+        XCTAssertEqual(uiKitImage.imageAddress, "0x00000001410b1a00")
+        XCTAssertEqual(uiKitImage.imageSize, 1_352_256)
+        XCTAssertEqual(uiKitImage.codeFile, "UIKit")
+        
+        let dyldImage = try XCTUnwrap(actual.first { $0.codeFile == "dyld_sim" })
+        
+        XCTAssertEqual(dyldImage.debugID, "84BAEBDA-AD1A-33F4-B35D-8A45F5DAF322")
+        XCTAssertEqual(dyldImage.type, SentryDebugImageType)
+        XCTAssertEqual(dyldImage.imageVmAddress, "0x00007fff51af0000")
+        XCTAssertEqual(dyldImage.imageAddress, "0x0000000105705000")
+        XCTAssertEqual(dyldImage.imageSize, 352_256)
+        XCTAssertEqual(dyldImage.codeFile, "dyld_sim")
+    }
+    
+    func testGetDebugImagesFromCache_NoImages() {
+        let sut = fixture.getSut(images: [])
+        
+        let actual = sut.getDebugImagesFromCache()
         
         XCTAssertEqual(actual.count, 0)
     }

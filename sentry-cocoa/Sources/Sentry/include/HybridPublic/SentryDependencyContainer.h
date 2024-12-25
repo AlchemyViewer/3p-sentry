@@ -1,11 +1,14 @@
-#import "SentryDefines.h"
+#if __has_include(<Sentry/SentryDefines.h>)
+#    import <Sentry/SentryDefines.h>
+#else
+#    import "SentryDefines.h"
+#endif
 
-@class SentryANRTracker;
+@protocol SentryANRTracker;
 @class SentryAppStateManager;
 @class SentryBinaryImageCache;
 @class SentryCrash;
 @class SentryCrashWrapper;
-@class SentryCurrentDateProvider;
 @class SentryDebugImageProvider;
 @class SentryDispatchFactory;
 @class SentryDispatchQueueWrapper;
@@ -20,6 +23,8 @@
 @class SentryThreadWrapper;
 @class SentryThreadInspector;
 @protocol SentryRandom;
+@protocol SentryCurrentDateProvider;
+@protocol SentryRateLimits;
 
 #if SENTRY_HAS_METRIC_KIT
 @class SentryMXManager;
@@ -32,7 +37,7 @@
 @class SentryViewHierarchy;
 #endif // SENTRY_UIKIT_AVAILABLE
 
-#if TARGET_OS_IOS
+#if SENTRY_HAS_UIKIT
 @class SentryUIDeviceWrapper;
 #endif // TARGET_OS_IOS
 
@@ -62,16 +67,16 @@ SENTRY_NO_INIT
 @property (nonatomic, strong) SentryDispatchQueueWrapper *dispatchQueueWrapper;
 @property (nonatomic, strong) SentryNSNotificationCenterWrapper *notificationCenterWrapper;
 @property (nonatomic, strong) SentryDebugImageProvider *debugImageProvider;
-@property (nonatomic, strong) SentryANRTracker *anrTracker;
 @property (nonatomic, strong) SentryNSProcessInfoWrapper *processInfoWrapper;
 @property (nonatomic, strong) SentrySystemWrapper *systemWrapper;
 @property (nonatomic, strong) SentryDispatchFactory *dispatchFactory;
 @property (nonatomic, strong) SentryNSTimerFactory *timerFactory;
-@property (nonatomic, strong) SentryCurrentDateProvider *dateProvider;
+@property (nonatomic, strong) id<SentryCurrentDateProvider> dateProvider;
 @property (nonatomic, strong) SentryBinaryImageCache *binaryImageCache;
 @property (nonatomic, strong) SentryExtraContextProvider *extraContextProvider;
 @property (nonatomic, strong) SentrySysctl *sysctlWrapper;
 @property (nonatomic, strong) SentryThreadInspector *threadInspector;
+@property (nonatomic, strong) id<SentryRateLimits> rateLimits;
 
 #if SENTRY_UIKIT_AVAILABLE
 @property (nonatomic, strong) SentryFramesTracker *framesTracker;
@@ -80,7 +85,7 @@ SENTRY_NO_INIT
 @property (nonatomic, strong) SentryUIApplication *application;
 #endif // SENTRY_UIKIT_AVAILABLE
 
-#if TARGET_OS_IOS
+#if SENTRY_HAS_UIKIT
 @property (nonatomic, strong) SentryUIDeviceWrapper *uiDeviceWrapper;
 #endif // TARGET_OS_IOS
 
@@ -88,7 +93,10 @@ SENTRY_NO_INIT
 @property (nonatomic, strong) SentryReachability *reachability;
 #endif // !TARGET_OS_WATCH
 
-- (SentryANRTracker *)getANRTracker:(NSTimeInterval)timeout;
+- (id<SentryANRTracker>)getANRTracker:(NSTimeInterval)timeout;
+#if SENTRY_HAS_UIKIT
+- (id<SentryANRTracker>)getANRTracker:(NSTimeInterval)timeout isV2Enabled:(BOOL)isV2Enabled;
+#endif // SENTRY_HAS_UIKIT
 
 #if SENTRY_HAS_METRIC_KIT
 @property (nonatomic, strong) SentryMXManager *metricKitManager API_AVAILABLE(

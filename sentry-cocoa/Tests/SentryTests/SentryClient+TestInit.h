@@ -6,11 +6,11 @@
 @class SentryDispatchQueueWrapper;
 @class SentryThreadInspector;
 @class SentryTransportAdapter;
+@class SentryDebugImageProvider;
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface
-SentryClient ()
+@interface SentryClient ()
 
 - (_Nullable instancetype)initWithOptions:(SentryOptions *)options
                             dispatchQueue:(SentryDispatchQueueWrapper *)dispatchQueue
@@ -30,6 +30,7 @@ SentryClient ()
                     fileManager:(SentryFileManager *)fileManager
          deleteOldEnvelopeItems:(BOOL)deleteOldEnvelopeItems
                 threadInspector:(SentryThreadInspector *)threadInspector
+             debugImageProvider:(SentryDebugImageProvider *)debugImageProvider
                          random:(id<SentryRandom>)random
                          locale:(NSLocale *)locale
                        timezone:(NSTimeZone *)timezone;

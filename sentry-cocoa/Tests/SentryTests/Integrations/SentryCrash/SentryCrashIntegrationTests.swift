@@ -22,6 +22,7 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
             options = Options()
             options.dsn = SentryCrashIntegrationTests.dsnAsString
             options.releaseName = TestData.appState.releaseName
+            options.tracesSampleRate = 1.0
             
             client = TestClient(options: options, fileManager: try! SentryFileManager(options: options, dispatchQueueWrapper: dispatchQueueWrapper), deleteOldEnvelopeItems: false)
             hub = TestHub(client: client, andScope: nil)
@@ -102,11 +103,11 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
         assertContext(context: context)
     }
     
-    func testEndSessionAsCrashed_WithCurrentSession() {
+    func testEndSessionAsCrashed_WithCurrentSession() throws {
         let expectedCrashedSession = givenCrashedSession()
         SentrySDK.setCurrentHub(fixture.hub)
         
-        advanceTime(bySeconds: 10)
+        try advanceTime(bySeconds: 10)
         
         let sut = fixture.getSut()
         sut.install(with: Options())
@@ -115,14 +116,14 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
     }
     
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-    func testEndSessionAsCrashed_WhenOOM_WithCurrentSession() {
+    func testEndSessionAsCrashed_WhenOOM_WithCurrentSession() throws {
         givenOOMAppState()
         SentrySDK.startInvocations = 1
         
         let expectedCrashedSession = givenCrashedSession()
         
         SentrySDK.setCurrentHub(fixture.hub)
-        advanceTime(bySeconds: 10)
+        try advanceTime(bySeconds: 10)
         
         let sut = fixture.sutWithoutCrash
         sut.install(with: fixture.options)
@@ -264,6 +265,178 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
         api?.pointee.setEnabled(false)
     }
     
+#if os(macOS)
+    
+    func testUncaughtExceptions_Enabled() throws {
+        defer { resetUserDefaults() }
+        
+        let (sut, _) = givenSutWithGlobalHubAndCrashWrapper()
+        let options = Options()
+        options.enableUncaughtNSExceptionReporting = true
+        sut.install(with: options)
+        
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: "NSApplicationCrashOnExceptions"))
+        // We have to set the flat to false, cause otherwise we would crash
+        UserDefaults.standard.set(false, forKey: "NSApplicationCrashOnExceptions")
+        
+        let crashReporter = SentryDependencyContainer.sharedInstance().crashReporter
+        
+        defer {
+            crashReporter.uncaughtExceptionHandler = nil
+            wasUncaughtExceptionHandlerCalled = false
+        }
+        crashReporter.uncaughtExceptionHandler = uncaughtExceptionHandler
+        
+        NSApplication.shared.reportException(uncaughtInternalInconsistencyException)
+        XCTAssertTrue(wasUncaughtExceptionHandlerCalled)
+    }
+    
+    func testUncaughtExceptions_Enabled_ButSwizzlingDisabled() throws {
+        defer { resetUserDefaults() }
+        
+        let (sut, _) = givenSutWithGlobalHubAndCrashWrapper()
+        let options = Options()
+        options.enableUncaughtNSExceptionReporting = true
+        options.enableSwizzling = false
+        sut.install(with: options)
+        
+        XCTAssertFalse(UserDefaults.standard.bool(forKey: "NSApplicationCrashOnExceptions"))
+        
+        let crashReporter = SentryDependencyContainer.sharedInstance().crashReporter
+        
+        defer {
+            crashReporter.uncaughtExceptionHandler = nil
+            wasUncaughtExceptionHandlerCalled = false
+        }
+        crashReporter.uncaughtExceptionHandler = uncaughtExceptionHandler
+        
+        NSApplication.shared.reportException(uncaughtInternalInconsistencyException)
+        XCTAssertFalse(wasUncaughtExceptionHandlerCalled)
+    }
+    
+    func testUncaughtExceptions_Disabled() {
+        defer { resetUserDefaults() }
+        
+        let (sut, _) = givenSutWithGlobalHubAndCrashWrapper()
+        let options = Options()
+        options.enableUncaughtNSExceptionReporting = false
+        sut.install(with: options)
+        
+        XCTAssertFalse(UserDefaults.standard.bool(forKey: "NSApplicationCrashOnExceptions"))
+        
+        let crashReporter = SentryDependencyContainer.sharedInstance().crashReporter
+        
+        defer {
+            crashReporter.uncaughtExceptionHandler = nil
+            wasUncaughtExceptionHandlerCalled = false
+        }
+        crashReporter.uncaughtExceptionHandler = uncaughtExceptionHandler
+        
+        NSApplication.shared.reportException(uncaughtInternalInconsistencyException)
+        XCTAssertFalse(wasUncaughtExceptionHandlerCalled)
+    }
+#endif // os(macOS)
+    
+    func testEnableTracingForCrashes_SetsCallback() throws {
+        let (sut, _) = givenSutWithGlobalHubAndCrashWrapper()
+        let options = Options()
+        options.enablePersistingTracesWhenCrashing = true
+        sut.install(with: options)
+        
+        XCTAssertTrue(sentrycrash_hasSaveTransaction())
+    }
+    
+    func testEnableTracingForCrashes_Uninstall_RemovesCallback() throws {
+        let (sut, _) = givenSutWithGlobalHubAndCrashWrapper()
+        let options = Options()
+        options.enablePersistingTracesWhenCrashing = true
+        sut.install(with: options)
+        
+        sut.uninstall()
+        
+        XCTAssertFalse(sentrycrash_hasSaveTransaction())
+    }
+    
+    func testEnableTracingForCrashes_Disabled_DoesNotSetCallback() throws {
+        let (sut, _) = givenSutWithGlobalHubAndCrashWrapper()
+        let options = Options()
+        options.enablePersistingTracesWhenCrashing = false
+        sut.install(with: options)
+        
+        XCTAssertFalse(sentrycrash_hasSaveTransaction())
+    }
+    
+    func testEnableTracingForCrashes_InvokeCallback_StoresTransaction() throws {
+        let options = fixture.options
+        options.enablePersistingTracesWhenCrashing = true
+        
+        let client = SentryClient(options: options)
+        defer { client?.fileManager.deleteAllEnvelopes() }
+        let hub = SentryHub(client: client, andScope: nil)
+        SentrySDK.setCurrentHub(hub)
+        
+        let sut = fixture.getSut(crashWrapper: SentryCrashWrapper.sharedInstance())
+        sut.install(with: options)
+        
+        let transaction = SentrySDK.startTransaction(name: "Crashing", operation: "Operation", bindToScope: true)
+        
+        sentrycrash_invokeSaveTransaction()
+        
+        XCTAssertTrue(transaction.isFinished)
+        
+        XCTAssertEqual(1, client?.fileManager.getAllEnvelopes().count)
+        let transactionEnvelopeFileContents = try XCTUnwrap(client?.fileManager.getOldestEnvelope())
+        let envelope = try XCTUnwrap(SentrySerialization.envelope(with: transactionEnvelopeFileContents.contents))
+        XCTAssertEqual(1, envelope.items.count)
+        XCTAssertEqual("transaction", envelope.items.first?.header.type)
+    }
+    
+    func testEnableTracingForCrashes_InvokeCallbackWhenNoSpanOnScope_TransactionNotFinished() throws {
+        let options = fixture.options
+        options.enablePersistingTracesWhenCrashing = true
+        
+        let client = SentryClient(options: options)
+        defer { client?.fileManager.deleteAllEnvelopes() }
+        let hub = SentryHub(client: client, andScope: nil)
+        SentrySDK.setCurrentHub(hub)
+        
+        let sut = fixture.getSut(crashWrapper: SentryCrashWrapper.sharedInstance())
+        sut.install(with: options)
+        
+        let transaction = SentrySDK.startTransaction(name: "name", operation: "operation", bindToScope: true)
+        SentrySDK.currentHub().scope.span = nil
+        
+        sentrycrash_invokeSaveTransaction()
+        
+        XCTAssertFalse(transaction.isFinished)
+        XCTAssertEqual(0, client?.fileManager.getAllEnvelopes().count)
+    }
+    
+    func testEnableTracingForCrashes_InvokeCallback_WhenSpanOnScopeIsNotATracer_StoresTransaction() throws {
+        let options = fixture.options
+        options.enablePersistingTracesWhenCrashing = true
+        
+        let client = SentryClient(options: options)
+        defer { client?.fileManager.deleteAllEnvelopes() }
+        let hub = SentryHub(client: client, andScope: nil)
+        SentrySDK.setCurrentHub(hub)
+        
+        let sut = fixture.getSut(crashWrapper: SentryCrashWrapper.sharedInstance())
+        sut.install(with: options)
+        
+        let transaction = SentrySDK.startTransaction(name: "name", operation: "operation", bindToScope: true)
+        let span = transaction.startChild(operation: "child")
+        SentrySDK.currentHub().scope.span = span
+        
+        sentrycrash_invokeSaveTransaction()
+        
+        XCTAssertEqual(1, client?.fileManager.getAllEnvelopes().count)
+        let transactionEnvelopeFileContents = try XCTUnwrap(client?.fileManager.getOldestEnvelope())
+        let envelope = try XCTUnwrap(SentrySerialization.envelope(with: transactionEnvelopeFileContents.contents))
+        XCTAssertEqual(1, envelope.items.count)
+        XCTAssertEqual("transaction", envelope.items.first?.header.type)
+    }
+    
     private func givenCurrentSession() -> SentrySession {
         // serialize sets the timestamp
         let session = SentrySession(jsonObject: fixture.session.serialize())!
@@ -296,6 +469,9 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
     }
     
     private func givenSutWithGlobalHubAndCrashWrapper() -> (SentryCrashIntegration, SentryHub) {
+#if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+        SentryDependencyContainer.sharedInstance().uiDeviceWrapper.start()
+#endif
         let sut = fixture.getSut(crashWrapper: SentryCrashWrapper.sharedInstance())
         let hub = fixture.hub
         SentrySDK.setCurrentHub(hub)
@@ -371,7 +547,7 @@ class SentryCrashIntegrationTests: NotificationCenterTestCase {
         XCTAssertEqual(locale, device["locale"] as? String)
     }
     
-    private func advanceTime(bySeconds: TimeInterval) {
-        (SentryDependencyContainer.sharedInstance().dateProvider as! TestCurrentDateProvider).setDate(date: SentryDependencyContainer.sharedInstance().dateProvider.date().addingTimeInterval(bySeconds))
+    private func advanceTime(bySeconds: TimeInterval) throws {
+        try XCTUnwrap(SentryDependencyContainer.sharedInstance().dateProvider as? TestCurrentDateProvider).setDate(date: SentryDependencyContainer.sharedInstance().dateProvider.date().addingTimeInterval(bySeconds))
     }
 }

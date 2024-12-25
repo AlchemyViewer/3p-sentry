@@ -44,9 +44,6 @@ Test guidelines:
 * Make use of the fixture pattern for test setup code. For examples, checkout [SentryClientTest](/Tests/SentryTests/SentryClientTest.swift) or [SentryHttpTransportTests](/Tests/SentryTests/SentryHttpTransportTests.swift).
 * Use [TestData](/Tests/SentryTests/Protocol/TestData.swift) when possible to avoid setting up data classes with test values.
 * Name the variable of the class you are testing `sut`, which stands for [system under test](https://en.wikipedia.org/wiki/System_under_test).
-* We prefer using [Nimble](https://github.com/Quick/Nimble) over XCTest for test assertions. We can't use the latest Nimble version and are stuck
-with [v10.0.0](https://github.com/Quick/Nimble/releases/tag/v10.0.0), cause it's the latest one that still supports Xcode 13.2.1, which we use in CI for
-running our tests. [v11.0.0](https://github.com/Quick/Nimble/releases/tag/v11.0.0) already requires Swift 5.6 / Xcode 13.3.
 * When calling `SentrySDK.start` in a test, specify only the minimum integrations required to minimize side effects for tests and reduce flakiness.
 
 
@@ -122,6 +119,17 @@ You can run samples in a real device without changing certificates and provision
 * run `fastlane match_local`
 
 This will setup certificates and provisioning profiles into your machine, but in order to be able to run a sample in a real device you need to register that device with Sentry AppConnect account, add the device to the provisioning profile you want to use, download the profile again and open it with Xcode.
+
+## Promoting a beta release to a normal release
+
+We frequently release a beta version of our SDK and dogfood it with internal apps to increase our SDK stability. We continue to merge PRs to the main branch, so we can't promote a beta release by publishing it from the main branch. Instead, we create a branch from the GH tag of the beta release and promote it from there. To do this, follow these steps:
+
+1. Checkout a new branch from the GH tag of the beta release: `git checkout -b publish/x.x.x x.x.x-beta.1`. You can't use `release/x.x.x` or `x.x.x` as the branch name as craft will fail, as it creates a `release/x.x.x` branch for updating the changelog and it will create a tag `x.x.x` for the release.
+2. Duplicate the Changelog.md entry of the beta release and change header of the version number to unreleased.
+3. Commit and push the changes.
+4. Trigger the release workflow with use workflow from the `publish/x.x.x` branch and set the target branch to merge into to `publish/x.x.x`, cause per default craft will merge into the main branch and this could lead to merge conflicts in the changelog.
+5. After the successful release, validate that craft merged the changes back into `publish/x.x.x` branch and deleted the release branch.
+6. Manually open a PR from the `publish/x.x.x` branch into the main branch and merge it.
 
 ## Final Notes
 

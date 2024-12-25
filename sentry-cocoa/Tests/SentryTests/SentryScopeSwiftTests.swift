@@ -1,4 +1,3 @@
-import Nimble
 import SentryTestUtils
 import XCTest
 
@@ -24,6 +23,7 @@ class SentryScopeSwiftTests: XCTestCase {
         let transactionOperation = "Some Operation"
         let maxBreadcrumbs = 5
 
+        @available(*, deprecated)
         init() {
             date = Date(timeIntervalSince1970: 10)
             
@@ -81,12 +81,13 @@ class SentryScopeSwiftTests: XCTestCase {
     
     private var fixture: Fixture!
     
+    @available(*, deprecated)
     override func setUp() {
         super.setUp()
         fixture = Fixture()
     }
     
-    func testSerialize() {
+    func testSerialize() throws {
         let scope = fixture.scope
         let actual = scope.serialize()
         
@@ -105,7 +106,11 @@ class SentryScopeSwiftTests: XCTestCase {
         
         XCTAssertEqual(["key": "value"], actual["tags"] as? [String: String])
         XCTAssertEqual(["key": "value"], actual["extra"] as? [String: String])
+        
         XCTAssertEqual(fixture.context, actual["context"] as? [String: [String: String]])
+        
+        let propagationContext = fixture.scope.propagationContext
+        XCTAssertEqual(["span_id": propagationContext.spanId.sentrySpanIdString, "trace_id": propagationContext.traceId.sentryIdString], actual["traceContext"] as? [String: String])
         
         let actualUser = actual["user"] as? [String: Any]
         XCTAssertEqual(fixture.ipAddress, actualUser?["ip_address"] as? String)
@@ -118,14 +123,16 @@ class SentryScopeSwiftTests: XCTestCase {
         XCTAssertNotNil(actual["breadcrumbs"])
     }
 
-    func testInitWithScope() {
+    func testInitWithScope() throws {
         let scope = fixture.scope
         scope.span = fixture.transaction
 
-        let snapshot = scope.serialize() as! [String: AnyHashable]
+        let snapshot = try XCTUnwrap(scope.serialize() as? [String: AnyHashable])
 
         let cloned = Scope(scope: scope)
-        XCTAssertEqual(cloned.serialize() as! [String: AnyHashable], snapshot)
+        XCTAssertEqual(try XCTUnwrap(cloned.serialize() as? [String: AnyHashable]), snapshot)
+        XCTAssertEqual(scope.propagationContext.spanId, cloned.propagationContext.spanId)
+        XCTAssertEqual(scope.propagationContext.traceId, cloned.propagationContext.traceId)
 
         let (event1, event2) = (Event(), Event())
         (event1.timestamp, event2.timestamp) = (fixture.date, fixture.date)
@@ -133,8 +140,8 @@ class SentryScopeSwiftTests: XCTestCase {
         scope.applyTo(event: event1, maxBreadcrumbs: 10)
         cloned.applyTo(event: event2, maxBreadcrumbs: 10)
         XCTAssertEqual(
-            event1.serialize() as! [String: AnyHashable],
-            event2.serialize() as! [String: AnyHashable]
+            try XCTUnwrap(event1.serialize() as? [String: AnyHashable]),
+            try XCTUnwrap(event2.serialize() as? [String: AnyHashable])
         )
 
         cloned.setExtras(["aa": "b"])
@@ -145,8 +152,8 @@ class SentryScopeSwiftTests: XCTestCase {
         cloned.setDist("a456")
         cloned.setEnvironment("a789")
 
-        XCTAssertEqual(scope.serialize() as! [String: AnyHashable], snapshot)
-        XCTAssertNotEqual(scope.serialize() as! [String: AnyHashable], cloned.serialize() as! [String: AnyHashable])
+        XCTAssertEqual(try XCTUnwrap(scope.serialize() as? [String: AnyHashable]), snapshot)
+        XCTAssertNotEqual(try XCTUnwrap(scope.serialize() as? [String: AnyHashable]), try XCTUnwrap(cloned.serialize() as? [String: AnyHashable]))
     }
     
     func testApplyToEvent() {
@@ -224,6 +231,17 @@ class SentryScopeSwiftTests: XCTestCase {
         XCTAssertEqual(trace?["span_id"] as? String, fixture.transaction.spanId.sentrySpanIdString)
     }
     
+    func testApplyToEvent_ScopeWithSpan_NotAppliedToCrashEvent() {
+        let scope = fixture.scope
+        scope.span = fixture.transaction
+        let event = fixture.event
+        event.isCrashEvent = true
+        
+        let actual = scope.applyTo(event: event, maxBreadcrumbs: 10)
+        XCTAssertNil(fixture.event.context?["trace"])
+        XCTAssertNil(actual?.transaction)
+    }
+    
     func testApplyToEvent_EventWithDist() {
         let event = fixture.event
         event.dist = "myDist"
@@ -263,6 +281,7 @@ class SentryScopeSwiftTests: XCTestCase {
     
     func testUseSpanLock_DoesNotBlock_WithBlockingCallback() {
         let scope = fixture.scope
+        scope.span = fixture.transaction
         let queue = DispatchQueue(label: "test-queue", attributes: [.initiallyInactive, .concurrent])
         let expect = expectation(description: "useSpan callback is non-blocking")
         
@@ -295,6 +314,7 @@ class SentryScopeSwiftTests: XCTestCase {
     func testUseSpanLock_IsReentrant() {
         let expect = expectation(description: "finish on time")
         let scope = fixture.scope
+        scope.span = fixture.transaction
         scope.useSpan { _ in
             scope.useSpan { _ in
                 expect.fulfill()
@@ -304,13 +324,29 @@ class SentryScopeSwiftTests: XCTestCase {
         wait(for: [expect], timeout: 0.1)
     }
     
+    func testSpan_FromMultipleThreads() {
+        let scope = fixture.scope
+        
+        testConcurrentModifications(asyncWorkItems: 20, writeLoopCount: 10, writeWork: { _ in
+            
+            scope.span = SentryTracer(transactionContext: TransactionContext(name: self.fixture.transactionName, operation: self.fixture.transactionOperation), hub: nil)
+            
+            scope.useSpan { span in
+                XCTAssertNotNil(span)
+            }
+            
+        }, readWork: {
+            XCTAssertNotNil(scope.span)
+        })
+    }
+    
     func testMaxBreadcrumbs_IsZero() {
         let scope = Scope(maxBreadcrumbs: 0)
         
         scope.addBreadcrumb(fixture.breadcrumb)
         
         let serialized = scope.serialize()
-        expect(serialized["breadcrumbs"]) == nil
+        XCTAssertNil(serialized["breadcrumbs"])
     }
     
     func testMaxBreadcrumbs_IsNegative() {
@@ -319,7 +355,7 @@ class SentryScopeSwiftTests: XCTestCase {
         scope.addBreadcrumb(fixture.breadcrumb)
         
         let serialized = scope.serialize()
-        expect(serialized["breadcrumbs"]) == nil
+        XCTAssertNil(serialized["breadcrumbs"])
     }
     
     func testUseSpanForClear() {
@@ -449,6 +485,8 @@ class SentryScopeSwiftTests: XCTestCase {
             scope.addAttachment(TestData.fileAttachment)
             scope.clearAttachments()
             scope.addAttachment(TestData.fileAttachment)
+            
+            scope.span = SentryTracer(transactionContext: TransactionContext(name: self.fixture.transactionName, operation: self.fixture.transactionOperation), hub: nil)
             
             for _ in 0...10 {
                 scope.addBreadcrumb(self.fixture.breadcrumb)
@@ -600,7 +638,10 @@ class SentryScopeSwiftTests: XCTestCase {
         sut.addBreadcrumb(crumb)
         
         XCTAssertEqual(
-            [crumb.serialize() as! [String: AnyHashable], crumb.serialize() as! [String: AnyHashable]],
+            [
+                try XCTUnwrap(crumb.serialize() as? [String: AnyHashable]),
+                try XCTUnwrap(crumb.serialize() as? [String: AnyHashable])
+            ],
             observer.crumbs
         )
     }
@@ -614,6 +655,43 @@ class SentryScopeSwiftTests: XCTestCase {
         sut.clearBreadcrumbs()
         
         XCTAssertEqual(2, observer.clearBreadcrumbInvocations)
+    }
+    
+    func testScopeObserver_setSpan_SetsTraceContext() throws {
+        let sut = Scope()
+        let observer = fixture.observer
+        sut.add(observer)
+        
+        let transaction = fixture.transaction
+        sut.span = transaction
+
+        let traceContext = try XCTUnwrap(observer.traceContext)
+        let serializedTransaction = transaction.serialize()
+
+        XCTAssertEqual(Set(serializedTransaction.keys), Set(traceContext.keys))
+        
+        XCTAssertEqual(serializedTransaction["trace_id"] as? String, traceContext["trace_id"] as? String)
+        XCTAssertEqual(serializedTransaction["span_id"] as? String, traceContext["span_id"] as? String)
+        XCTAssertEqual(serializedTransaction["op"] as? String, traceContext["op"] as? String)
+        XCTAssertEqual(serializedTransaction["origin"] as? String, traceContext["origin"] as? String)
+        XCTAssertEqual(serializedTransaction["type"] as? String, traceContext["type"] as? String)
+        XCTAssertEqual(serializedTransaction["start_timestamp"] as? Double, traceContext["start_timestamp"] as? Double)
+        XCTAssertEqual(serializedTransaction["timestamp"] as? Double, traceContext["timestamp"] as? Double)
+    }
+
+    func testScopeObserver_setSpanToNil_SetsTraceContextToPropagationContext() throws {
+        let sut = Scope()
+        let observer = fixture.observer
+        sut.add(observer)
+        
+        sut.span = fixture.transaction
+        sut.span = nil
+        
+        let traceContext = try XCTUnwrap(observer.traceContext)
+
+        XCTAssertEqual(2, traceContext.count)
+        XCTAssertEqual(sut.propagationContext.traceId.sentryIdString, traceContext["trace_id"] as? String)
+        XCTAssertEqual(sut.propagationContext.spanId.sentrySpanIdString, traceContext["span_id"] as? String)
     }
     
     func testScopeObserver_clear() {
@@ -680,6 +758,17 @@ class SentryScopeSwiftTests: XCTestCase {
         XCTAssertEqual(0, scopeCrumbs?.count ?? 0)
     }
     
+    func testModifyScopeFromDifferentThreads() {
+        let scope = Scope()
+        scope.add(SentryCrashScopeObserver(maxBreadcrumbs: 100))
+        
+        testConcurrentModifications(asyncWorkItems: 10, writeLoopCount: 1_000, writeWork: { i in
+            let user = User()
+            user.name = "name \(i)"
+            scope.setUser(user)
+        })
+    }
+    
     class TestScopeObserver: NSObject, SentryScopeObserver {
         var tags: [String: String]?
         func setTags(_ tags: [String: String]?) {
@@ -694,6 +783,11 @@ class SentryScopeSwiftTests: XCTestCase {
         var context: [String: Any]?
         func setContext(_ context: [String: Any]?) {
             self.context = context
+        }
+        
+        var traceContext: [String: Any]?
+        func setTraceContext(_ traceContext: [String: Any]?) {
+            self.traceContext = traceContext
         }
         
         var dist: String?
@@ -718,7 +812,10 @@ class SentryScopeSwiftTests: XCTestCase {
         
         var crumbs: [[String: AnyHashable]] = []
         func addSerializedBreadcrumb(_ crumb: [String: Any]) {
-            crumbs.append(crumb as! [String: AnyHashable])
+            guard let typedCrumb = crumb as? [String: AnyHashable] else {
+                return
+            }
+            crumbs.append(typedCrumb)
         }
 
         var clearBreadcrumbInvocations = 0

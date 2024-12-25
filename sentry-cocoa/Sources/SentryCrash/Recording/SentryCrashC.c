@@ -37,11 +37,11 @@
 #include "SentryCrashReportFixer.h"
 #include "SentryCrashReportStore.h"
 #include "SentryCrashString.h"
-#include "SentryCrashSystemCapabilities.h"
+#include "SentryInternalCDefines.h"
 
-// #define SentryCrashLogger_LocalLevel TRACE
-#include "SentryCrashLogger.h"
+#include "SentryAsyncSafeLog.h"
 
+#include "SentrySessionReplaySyncC.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -58,7 +58,7 @@ static SentryCrashMonitorType g_monitoring = SentryCrashMonitorTypeProductionSaf
 static char g_lastCrashReportFilePath[SentryCrashFU_MAX_PATH_LENGTH];
 static void (*g_saveScreenShot)(const char *) = 0;
 static void (*g_saveViewHierarchy)(const char *) = 0;
-
+static void (*g_saveTransaction)(void) = 0;
 // ============================================================================
 #pragma mark - Utility -
 // ============================================================================
@@ -74,7 +74,7 @@ static void (*g_saveViewHierarchy)(const char *) = 0;
 static void
 onCrash(struct SentryCrash_MonitorContext *monitorContext)
 {
-    SentryCrashLOG_DEBUG("Updating application state to note crash.");
+    SENTRY_ASYNC_SAFE_LOG_DEBUG("Updating application state to note crash.");
     sentrycrashstate_notifyAppCrash();
 
     if (monitorContext->crashedDuringCrashHandling) {
@@ -84,10 +84,12 @@ onCrash(struct SentryCrash_MonitorContext *monitorContext)
         sentrycrashcrs_getNextCrashReportPath(crashReportFilePath);
         strncpy(g_lastCrashReportFilePath, crashReportFilePath, sizeof(g_lastCrashReportFilePath));
         sentrycrashreport_writeStandardReport(monitorContext, crashReportFilePath);
+        sentrySessionReplaySync_writeInfo();
     }
 
     // Report is saved to disk, now we try to take screenshots
-    // and view hierarchies.
+    // and view hierarchies, and try to save any ongoing transaction
+    // bound to the scope.
     // Depending on the state of the crash this may not work
     // because we gonna call into non async-signal safe code
     // but since the app is already in a crash state we don't
@@ -107,6 +109,10 @@ onCrash(struct SentryCrash_MonitorContext *monitorContext)
             }
         }
     }
+
+    if (g_saveTransaction) {
+        g_saveTransaction();
+    }
 }
 
 // ============================================================================
@@ -116,10 +122,10 @@ onCrash(struct SentryCrash_MonitorContext *monitorContext)
 SentryCrashMonitorType
 sentrycrash_install(const char *appName, const char *const installPath)
 {
-    SentryCrashLOG_DEBUG("Installing crash reporter.");
+    SENTRY_ASYNC_SAFE_LOG_DEBUG("Installing crash reporter.");
 
     if (g_installed) {
-        SentryCrashLOG_DEBUG("Crash reporter already installed.");
+        SENTRY_ASYNC_SAFE_LOG_DEBUG("Crash reporter already installed.");
         return g_monitoring;
     }
     g_installed = 1;
@@ -139,7 +145,7 @@ sentrycrash_install(const char *appName, const char *const installPath)
     sentrycrashcm_setEventCallback(onCrash);
     SentryCrashMonitorType monitors = sentrycrash_setMonitoring(g_monitoring);
 
-    SentryCrashLOG_DEBUG("Installation complete.");
+    SENTRY_ASYNC_SAFE_LOG_DEBUG("Installation complete.");
     return monitors;
 }
 
@@ -201,6 +207,12 @@ sentrycrash_setSaveViewHierarchy(void (*callback)(const char *))
 }
 
 void
+sentrycrash_setSaveTransaction(void (*callback)(void))
+{
+    g_saveTransaction = callback;
+}
+
+void
 sentrycrash_notifyAppActive(bool isActive)
 {
     sentrycrashstate_notifyAppActive(isActive);
@@ -240,19 +252,19 @@ char *
 sentrycrash_readReport(int64_t reportID)
 {
     if (reportID <= 0) {
-        SentryCrashLOG_ERROR("Report ID was %" PRIx64, reportID);
+        SENTRY_ASYNC_SAFE_LOG_ERROR("Report ID was %" PRIx64, reportID);
         return NULL;
     }
 
     char *rawReport = sentrycrashcrs_readReport(reportID);
     if (rawReport == NULL) {
-        SentryCrashLOG_ERROR("Failed to load report ID %" PRIx64, reportID);
+        SENTRY_ASYNC_SAFE_LOG_ERROR("Failed to load report ID %" PRIx64, reportID);
         return NULL;
     }
 
     char *fixedReport = sentrycrashcrf_fixupCrashReport(rawReport);
     if (fixedReport == NULL) {
-        SentryCrashLOG_ERROR("Failed to fixup report ID %" PRIx64, reportID);
+        SENTRY_ASYNC_SAFE_LOG_ERROR("Failed to fixup report ID %" PRIx64, reportID);
     }
 
     free(rawReport);
@@ -287,4 +299,18 @@ bool
 sentrycrash_hasSaveViewHierarchyCallback(void)
 {
     return g_saveViewHierarchy != NULL;
+}
+
+bool
+sentrycrash_hasSaveTransaction(void)
+{
+    return g_saveTransaction != NULL;
+}
+
+void
+sentrycrash_invokeSaveTransaction(void)
+{
+    if (g_saveTransaction) {
+        g_saveTransaction();
+    }
 }
