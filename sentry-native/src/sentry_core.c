@@ -8,6 +8,7 @@
 #include "sentry_database.h"
 #include "sentry_envelope.h"
 #include "sentry_options.h"
+#include "sentry_os.h"
 #include "sentry_path.h"
 #include "sentry_random.h"
 #include "sentry_scope.h"
@@ -194,6 +195,10 @@ sentry_init(sentry_options_t *options)
     if (options->auto_session_tracking) {
         sentry_start_session();
     }
+
+#ifdef SENTRY_PLATFORM_WINDOWS
+    sentry__init_cached_functions();
+#endif
 
     sentry__mutex_unlock(&g_options_lock);
     return 0;
@@ -496,7 +501,7 @@ sentry__prepare_event(const sentry_options_t *options, sentry_value_t event,
 
     SENTRY_TRACE("adding attachments to envelope");
     for (sentry_attachment_t *attachment = options->attachments; attachment;
-         attachment = attachment->next) {
+        attachment = attachment->next) {
         sentry_envelope_item_t *item = sentry__envelope_add_from_path(
             envelope, attachment->path, "attachment");
         if (!item) {
@@ -647,7 +652,7 @@ sentry_add_breadcrumb(sentry_value_t breadcrumb)
     // the `no_flush` will avoid triggering *both* scope-change and
     // breadcrumb-add events.
     SENTRY_WITH_SCOPE_MUT_NO_FLUSH (scope) {
-        sentry__value_append_bounded(
+        sentry__value_append_ringbuffer(
             scope->breadcrumbs, breadcrumb, max_breadcrumbs);
     }
 }
@@ -838,6 +843,14 @@ sentry_transaction_t *
 sentry_transaction_start(
     sentry_transaction_context_t *opaque_tx_cxt, sentry_value_t sampling_ctx)
 {
+    return sentry_transaction_start_ts(
+        opaque_tx_cxt, sampling_ctx, sentry__usec_time());
+}
+
+sentry_transaction_t *
+sentry_transaction_start_ts(sentry_transaction_context_t *opaque_tx_cxt,
+    sentry_value_t sampling_ctx, uint64_t timestamp)
+{
     // Just free this immediately until we implement proper support for
     // traces_sampler.
     sentry_value_decref(sampling_ctx);
@@ -869,7 +882,7 @@ sentry_transaction_start(
 
     sentry_value_set_by_key(tx, "start_timestamp",
         sentry__value_new_string_owned(
-            sentry__usec_time_to_iso8601(sentry__usec_time())));
+            sentry__usec_time_to_iso8601(timestamp)));
 
     sentry__transaction_context_free(opaque_tx_cxt);
     return sentry__transaction_new(tx);
@@ -877,6 +890,13 @@ sentry_transaction_start(
 
 sentry_uuid_t
 sentry_transaction_finish(sentry_transaction_t *opaque_tx)
+{
+    return sentry_transaction_finish_ts(opaque_tx, sentry__usec_time());
+}
+
+sentry_uuid_t
+sentry_transaction_finish_ts(
+    sentry_transaction_t *opaque_tx, uint64_t timestamp)
 {
     if (!opaque_tx || sentry_value_is_null(opaque_tx->inner)) {
         SENTRY_DEBUG("no transaction available to finish");
@@ -914,7 +934,7 @@ sentry_transaction_finish(sentry_transaction_t *opaque_tx)
     sentry_value_set_by_key(tx, "type", sentry_value_new_string("transaction"));
     sentry_value_set_by_key(tx, "timestamp",
         sentry__value_new_string_owned(
-            sentry__usec_time_to_iso8601(sentry__usec_time())));
+            sentry__usec_time_to_iso8601(timestamp)));
     // TODO: This might not actually be necessary. Revisit after talking to
     // the relay team about this.
     sentry_value_set_by_key(tx, "level", sentry_value_new_string("info"));
@@ -929,6 +949,9 @@ sentry_transaction_finish(sentry_transaction_t *opaque_tx)
     sentry_value_t trace_context
         = sentry__value_get_trace_context(opaque_tx->inner);
     sentry_value_t contexts = sentry_value_new_object();
+    sentry_value_set_by_key(
+        trace_context, "data", sentry_value_get_by_key(tx, "data"));
+    sentry_value_incref(sentry_value_get_by_key(tx, "data"));
     sentry_value_set_by_key(contexts, "trace", trace_context);
     sentry_value_set_by_key(tx, "contexts", contexts);
 
@@ -939,6 +962,7 @@ sentry_transaction_finish(sentry_transaction_t *opaque_tx)
     sentry_value_remove_by_key(tx, "op");
     sentry_value_remove_by_key(tx, "description");
     sentry_value_remove_by_key(tx, "status");
+    sentry_value_remove_by_key(tx, "data");
 
     sentry__transaction_decref(opaque_tx);
 
@@ -979,6 +1003,24 @@ sentry_transaction_start_child_n(sentry_transaction_t *opaque_parent,
     const char *operation, size_t operation_len, const char *description,
     size_t description_len)
 {
+    return sentry_transaction_start_child_ts_n(opaque_parent, operation,
+        operation_len, description, description_len, sentry__usec_time());
+}
+
+sentry_span_t *
+sentry_transaction_start_child(sentry_transaction_t *opaque_parent,
+    const char *operation, const char *description)
+{
+    return sentry_transaction_start_child_n(opaque_parent, operation,
+        sentry__guarded_strlen(operation), description,
+        sentry__guarded_strlen(description));
+}
+
+sentry_span_t *
+sentry_transaction_start_child_ts_n(sentry_transaction_t *opaque_parent,
+    const char *operation, size_t operation_len, const char *description,
+    size_t description_len, const uint64_t timestamp)
+{
     if (!opaque_parent || sentry_value_is_null(opaque_parent->inner)) {
         SENTRY_DEBUG("no transaction available to create a child under");
         return NULL;
@@ -994,23 +1036,40 @@ sentry_transaction_start_child_n(sentry_transaction_t *opaque_parent,
 
     sentry_value_t span = sentry__value_span_new_n(max_spans, parent,
         (sentry_slice_t) { operation, operation_len },
-        (sentry_slice_t) { description, description_len });
+        (sentry_slice_t) { description, description_len }, timestamp);
     return sentry__span_new(opaque_parent, span);
 }
 
 sentry_span_t *
-sentry_transaction_start_child(sentry_transaction_t *opaque_parent,
-    const char *operation, const char *description)
+sentry_transaction_start_child_ts(sentry_transaction_t *opaque_parent,
+    const char *operation, const char *description, const uint64_t timestamp)
 {
-    const size_t operation_len = operation ? strlen(operation) : 0;
-    const size_t description_len = description ? strlen(description) : 0;
-    return sentry_transaction_start_child_n(
-        opaque_parent, operation, operation_len, description, description_len);
+    return sentry_transaction_start_child_ts_n(opaque_parent, operation,
+        sentry__guarded_strlen(operation), description,
+        sentry__guarded_strlen(description), timestamp);
 }
 
 sentry_span_t *
 sentry_span_start_child_n(sentry_span_t *opaque_parent, const char *operation,
     size_t operation_len, const char *description, size_t description_len)
+{
+    return sentry_span_start_child_ts_n(opaque_parent, operation, operation_len,
+        description, description_len, sentry__usec_time());
+}
+
+sentry_span_t *
+sentry_span_start_child(sentry_span_t *opaque_parent, const char *operation,
+    const char *description)
+{
+    return sentry_span_start_child_n(opaque_parent, operation,
+        sentry__guarded_strlen(operation), description,
+        sentry__guarded_strlen(description));
+}
+
+sentry_span_t *
+sentry_span_start_child_ts_n(sentry_span_t *opaque_parent,
+    const char *operation, size_t operation_len, const char *description,
+    size_t description_len, uint64_t timestamp)
 {
     if (!opaque_parent || sentry_value_is_null(opaque_parent->inner)) {
         SENTRY_DEBUG("no parent span available to create a child span under");
@@ -1031,23 +1090,28 @@ sentry_span_start_child_n(sentry_span_t *opaque_parent, const char *operation,
 
     sentry_value_t span = sentry__value_span_new_n(max_spans, parent,
         (sentry_slice_t) { operation, operation_len },
-        (sentry_slice_t) { description, description_len });
+        (sentry_slice_t) { description, description_len }, timestamp);
 
     return sentry__span_new(opaque_parent->transaction, span);
 }
 
 sentry_span_t *
-sentry_span_start_child(sentry_span_t *opaque_parent, const char *operation,
-    const char *description)
+sentry_span_start_child_ts(sentry_span_t *opaque_parent, const char *operation,
+    const char *description, uint64_t timestamp)
 {
-    size_t operation_len = operation ? strlen(operation) : 0;
-    size_t description_len = description ? strlen(description) : 0;
-    return sentry_span_start_child_n(
-        opaque_parent, operation, operation_len, description, description_len);
+    return sentry_span_start_child_ts_n(opaque_parent, operation,
+        sentry__guarded_strlen(operation), description,
+        sentry__guarded_strlen(description), timestamp);
 }
 
 void
 sentry_span_finish(sentry_span_t *opaque_span)
+{
+    sentry_span_finish_ts(opaque_span, sentry__usec_time());
+}
+
+void
+sentry_span_finish_ts(sentry_span_t *opaque_span, uint64_t timestamp)
 {
     if (!opaque_span || sentry_value_is_null(opaque_span->inner)) {
         SENTRY_DEBUG("no span to finish");
@@ -1111,7 +1175,7 @@ sentry_span_finish(sentry_span_t *opaque_span)
 
     sentry_value_set_by_key(span, "timestamp",
         sentry__value_new_string_owned(
-            sentry__usec_time_to_iso8601(sentry__usec_time())));
+            sentry__usec_time_to_iso8601(timestamp)));
     sentry_value_remove_by_key(span, "sampled");
 
     size_t max_spans = SENTRY_SPANS_MAX;
@@ -1170,4 +1234,61 @@ sentry_clear_crashed_last_run(void)
     }
     sentry__options_unlock();
     return success ? 0 : 1;
+}
+
+void
+sentry_capture_minidump(const char *path)
+{
+    sentry_capture_minidump_n(path, sentry__guarded_strlen(path));
+}
+
+void
+sentry_capture_minidump_n(const char *path, size_t path_len)
+{
+    sentry_path_t *dump_path = sentry__path_from_str_n(path, path_len);
+
+    if (!dump_path) {
+        SENTRY_WARN(
+            "sentry_capture_minidump() failed due to null path to minidump");
+        return;
+    }
+
+    SENTRY_DEBUGF(
+        "Capturing minidump \"%" SENTRY_PATH_PRI "\"", dump_path->path);
+
+    sentry_value_t event = sentry_value_new_event();
+    sentry_value_set_by_key(
+        event, "level", sentry__value_new_level(SENTRY_LEVEL_FATAL));
+
+    SENTRY_WITH_OPTIONS (options) {
+        sentry_envelope_t *envelope
+            = sentry__prepare_event(options, event, NULL, true);
+
+        if (envelope) {
+            // the minidump is added as an attachment, with type
+            // `event.minidump`
+            sentry_envelope_item_t *item = sentry__envelope_add_from_path(
+                envelope, dump_path, "attachment");
+            if (item) {
+                sentry__envelope_item_set_header(item, "attachment_type",
+                    sentry_value_new_string("event.minidump"));
+
+                sentry__envelope_item_set_header(item, "filename",
+#ifdef SENTRY_PLATFORM_WINDOWS
+                    sentry__value_new_string_from_wstr(
+#else
+                    sentry_value_new_string(
+#endif
+                        sentry__path_filename(dump_path)));
+            }
+
+            sentry__capture_envelope(options->transport, envelope);
+
+            SENTRY_DEBUGF("Minidump has been captured: \"%" SENTRY_PATH_PRI
+                          "\"",
+                dump_path->path);
+        }
+    }
+
+    sentry__path_free(dump_path);
 }

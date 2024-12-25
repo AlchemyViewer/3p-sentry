@@ -1,6 +1,6 @@
 #import "PrivateSentrySDKOnly.h"
 #import "SentryClient.h"
-#import "SentryDebugImageProvider.h"
+#import "SentryDebugImageProvider+HybridSDKs.h"
 #import "SentryDependencyContainer.h"
 #import "SentryEvent+Private.h"
 #import "SentryFileManager.h"
@@ -16,7 +16,7 @@
 #import "SentryRandom.h"
 #import "SentrySDK+Private.h"
 #import "SentrySamplerDecision.h"
-#import "SentryScope.h"
+#import "SentryScope+Private.h"
 #import "SentrySpan.h"
 #import "SentrySpanContext+Private.h"
 #import "SentrySpanContext.h"
@@ -36,6 +36,7 @@
 #import <SentrySpanOperations.h>
 
 #if SENTRY_TARGET_PROFILING_SUPPORTED
+#    import "SentryCaptureTransactionWithProfile.h"
 #    import "SentryLaunchProfiling.h"
 #    import "SentryProfiledTracerConcurrency.h"
 #    import "SentryProfilerSerialization.h"
@@ -64,8 +65,7 @@ static const NSTimeInterval SENTRY_APP_START_MEASUREMENT_DIFFERENCE = 5.0;
 
 static const NSTimeInterval SENTRY_AUTO_TRANSACTION_DEADLINE = 30.0;
 
-@interface
-SentryTracer ()
+@interface SentryTracer ()
 
 @property (nonatomic) uint64_t startSystemTime;
 @property (nonatomic) SentrySpanStatus finishStatus;
@@ -154,7 +154,17 @@ static BOOL appStartMeasurementRead;
     }
 
 #if SENTRY_HAS_UIKIT
-    viewNames = [SentryDependencyContainer.sharedInstance.application relevantViewControllersNames];
+    [hub configureScope:^(SentryScope *scope) {
+        if (scope.currentScreen != nil) {
+            self->viewNames = @[ scope.currentScreen ];
+        }
+    }];
+
+    if (viewNames == nil) {
+        viewNames =
+            [SentryDependencyContainer.sharedInstance.application relevantViewControllersNames];
+    }
+
 #endif // SENTRY_HAS_UIKIT
 
     _idleTimeoutLock = [[NSObject alloc] init];
@@ -261,7 +271,7 @@ static BOOL appStartMeasurementRead;
 - (void)startDeadlineTimer
 {
     __weak SentryTracer *weakSelf = self;
-    [_dispatchQueue dispatchOnMainQueue:^{
+    [_dispatchQueue dispatchAsyncOnMainQueue:^{
         weakSelf.deadlineTimer = [weakSelf.configuration.timerFactory
             scheduledTimerWithTimeInterval:SENTRY_AUTO_TRANSACTION_DEADLINE
                                    repeats:NO
@@ -293,17 +303,22 @@ static BOOL appStartMeasurementRead;
         }
     }
 
-    [self finishWithStatus:kSentrySpanStatusDeadlineExceeded];
+    _finishStatus = kSentrySpanStatusDeadlineExceeded;
+    [self finishInternal];
 }
 
 - (void)cancelDeadlineTimer
 {
+    if (self.deadlineTimer == nil) {
+        return;
+    }
+
     // If the main thread is busy the tracer could be deallocated in between.
     __weak SentryTracer *weakSelf = self;
 
     // The timer must be invalidated from the thread on which the timer was installed, see
     // https://developer.apple.com/documentation/foundation/nstimer/1415405-invalidate#1770468
-    [_dispatchQueue dispatchOnMainQueue:^{
+    [_dispatchQueue dispatchAsyncOnMainQueue:^{
         if (weakSelf == nil) {
             SENTRY_LOG_DEBUG(@"WeakSelf is nil. Not invalidating deadlineTimer.");
             return;
@@ -319,7 +334,7 @@ static BOOL appStartMeasurementRead;
 
     if (self.delegate) {
         @synchronized(_children) {
-            span = [self.delegate activeSpanForTracer:self];
+            span = [self.delegate getActiveSpan];
             if (span == nil || ![_children containsObject:span]) {
                 span = self;
             }
@@ -402,14 +417,16 @@ static BOOL appStartMeasurementRead;
     [self canBeFinished];
 }
 
-- (SentryTraceContext *)traceContext
+- (nullable SentryTraceContext *)traceContext
 {
     if (_traceContext == nil) {
         @synchronized(self) {
             if (_traceContext == nil) {
                 _traceContext = [[SentryTraceContext alloc] initWithTracer:self
                                                                      scope:_hub.scope
-                                                                   options:SentrySDK.options];
+                                                                   options:_hub.client.options
+                        ?: SentrySDK.options]; // We should remove static classes and always
+                                               // inject dependencies.
             }
         }
     }
@@ -448,6 +465,23 @@ static BOOL appStartMeasurementRead;
     }
     _finishStatus = status;
     [self canBeFinished];
+}
+
+- (void)finishForCrash
+{
+    self.wasFinishCalled = YES;
+    _finishStatus = kSentrySpanStatusInternalError;
+
+    // We don't need to clean up during finish cause we're crashing, and the cleanup can execute
+    // code that leads to the app hanging and not terminating.
+    BOOL discardTransaction = [self finishTracer:kSentrySpanStatusInternalError shouldCleanUp:NO];
+    if (discardTransaction) {
+        return;
+    }
+
+    SentryTransaction *transaction = [self toTransaction];
+
+    [_hub saveCrashTransaction:transaction];
 }
 
 - (void)canBeFinished
@@ -504,87 +538,10 @@ static BOOL appStartMeasurementRead;
 
 - (void)finishInternal
 {
-    [self cancelDeadlineTimer];
-    if (self.isFinished) {
-        SENTRY_LOG_DEBUG(@"Tracer %@ was already finished.", _traceContext.traceId.sentryIdString);
+    BOOL discardTransaction = [self finishTracer:kSentrySpanStatusDeadlineExceeded
+                                   shouldCleanUp:YES];
+    if (discardTransaction) {
         return;
-    }
-    @synchronized(self) {
-        if (self.isFinished) {
-            SENTRY_LOG_DEBUG(@"Tracer %@ was already finished after synchronizing.",
-                _traceContext.traceId.sentryIdString);
-            return;
-        }
-        // Keep existing status of auto generated transactions if set by the user.
-
-        if ([self isAutoGeneratedTransaction] && !self.wasFinishCalled
-            && self.status != kSentrySpanStatusUndefined) {
-            _finishStatus = self.status;
-        }
-        [super finishWithStatus:_finishStatus];
-    }
-#if SENTRY_HAS_UIKIT
-    appStartMeasurement = [self getAppStartMeasurement];
-
-    if (appStartMeasurement != nil) {
-        [self updateStartTime:appStartMeasurement.appStartTimestamp];
-    }
-#endif // SENTRY_HAS_UIKIT
-
-    [self.delegate tracerDidFinish:self];
-
-    if (self.finishCallback) {
-        self.finishCallback(self);
-
-        // The callback will only be executed once. No need to keep the reference and we avoid
-        // potential retain cycles.
-        self.finishCallback = nil;
-    }
-
-    // Prewarming can execute code up to viewDidLoad of a UIViewController, and keep the app in the
-    // background. This can lead to auto-generated transactions lasting for minutes or even hours.
-    // Therefore, we drop transactions lasting longer than SENTRY_AUTO_TRANSACTION_MAX_DURATION.
-    NSTimeInterval transactionDuration = [self.timestamp timeIntervalSinceDate:self.startTimestamp];
-    if ([self isAutoGeneratedTransaction]
-        && transactionDuration >= SENTRY_AUTO_TRANSACTION_MAX_DURATION) {
-        SENTRY_LOG_INFO(@"Auto generated transaction exceeded the max duration of %f seconds. Not "
-                        @"capturing transaction.",
-            SENTRY_AUTO_TRANSACTION_MAX_DURATION);
-        return;
-    }
-
-    if (_hub == nil) {
-        SENTRY_LOG_DEBUG(
-            @"Hub was nil for tracer %@, nothing to do.", _traceContext.traceId.sentryIdString);
-        return;
-    }
-
-    [_hub.scope useSpan:^(id<SentrySpan> _Nullable span) {
-        if (span == self) {
-            [self->_hub.scope setSpan:nil];
-        }
-    }];
-
-    @synchronized(_children) {
-        if (_configuration.idleTimeout > 0.0 && _children.count == 0) {
-            SENTRY_LOG_DEBUG(@"Was waiting for timeout for UI event trace but it had no children, "
-                             @"will not keep transaction.");
-            return;
-        }
-
-        for (id<SentrySpan> span in _children) {
-            if (!span.isFinished) {
-                [span finishWithStatus:kSentrySpanStatusDeadlineExceeded];
-
-                // Unfinished children should have the same
-                // end timestamp as their parent transaction
-                span.timestamp = self.timestamp;
-            }
-        }
-
-        if ([self isAutoGeneratedTransaction]) {
-            [self trimEndTimestamp];
-        }
     }
 
     SentryTransaction *transaction = [self toTransaction];
@@ -608,7 +565,8 @@ static BOOL appStartMeasurementRead;
             startTimestamp = [SentryDependencyContainer.sharedInstance.dateProvider date];
         }
 
-        [self captureTransactionWithProfile:transaction startTimestamp:startTimestamp];
+        sentry_captureTransactionWithProfile(
+            self.hub, self.dispatchQueue, transaction, startTimestamp);
         return;
     }
 #endif // SENTRY_TARGET_PROFILING_SUPPORTED
@@ -616,25 +574,106 @@ static BOOL appStartMeasurementRead;
     [_hub captureTransaction:transaction withScope:_hub.scope];
 }
 
-#if SENTRY_TARGET_PROFILING_SUPPORTED
-- (void)captureTransactionWithProfile:(SentryTransaction *)transaction
-                       startTimestamp:(NSDate *)startTimestamp
+- (BOOL)finishTracer:(SentrySpanStatus)unfinishedSpansFinishStatus shouldCleanUp:(BOOL)shouldCleanUp
 {
-    SentryEnvelopeItem *profileEnvelopeItem
-        = sentry_traceProfileEnvelopeItem(transaction, startTimestamp);
-
-    if (!profileEnvelopeItem) {
-        [_hub captureTransaction:transaction withScope:_hub.scope];
-        return;
+    if (shouldCleanUp) {
+        [self cancelDeadlineTimer];
     }
 
-    SENTRY_LOG_DEBUG(@"Capturing transaction id %@ with profiling data attached for tracer id %@.",
-        transaction.eventId.sentryIdString, self.internalID.sentryIdString);
-    [_hub captureTransaction:transaction
-                      withScope:_hub.scope
-        additionalEnvelopeItems:@[ profileEnvelopeItem ]];
+    if (self.isFinished) {
+        SENTRY_LOG_DEBUG(@"Tracer %@ was already finished.", _traceContext.traceId.sentryIdString);
+        return YES;
+    }
+    @synchronized(self) {
+        if (self.isFinished) {
+            SENTRY_LOG_DEBUG(@"Tracer %@ was already finished after synchronizing.",
+                _traceContext.traceId.sentryIdString);
+            return YES;
+        }
+        // Keep existing status of auto generated transactions if set by the user.
+
+        if ([self isAutoGeneratedTransaction] && !self.wasFinishCalled
+            && self.status != kSentrySpanStatusUndefined) {
+            _finishStatus = self.status;
+        }
+        [super finishWithStatus:_finishStatus];
+    }
+#if SENTRY_HAS_UIKIT
+    appStartMeasurement = [self getAppStartMeasurement];
+
+    if (appStartMeasurement != nil) {
+        [self updateStartTime:appStartMeasurement.appStartTimestamp];
+    }
+#endif // SENTRY_HAS_UIKIT
+
+    if (shouldCleanUp) {
+        [self.delegate tracerDidFinish:self];
+
+        if (self.finishCallback) {
+            self.finishCallback(self);
+
+            // The callback will only be executed once. No need to keep the reference and we avoid
+            // potential retain cycles.
+            self.finishCallback = nil;
+        }
+    }
+
+    // Prewarming can execute code up to viewDidLoad of a UIViewController, and keep the app in the
+    // background. This can lead to auto-generated transactions lasting for minutes or even hours.
+    // Therefore, we drop transactions lasting longer than SENTRY_AUTO_TRANSACTION_MAX_DURATION.
+    NSTimeInterval transactionDuration = [self.timestamp timeIntervalSinceDate:self.startTimestamp];
+    if ([self isAutoGeneratedTransaction]
+        && transactionDuration >= SENTRY_AUTO_TRANSACTION_MAX_DURATION) {
+        SENTRY_LOG_INFO(@"Auto generated transaction exceeded the max duration of %f seconds. Not "
+                        @"capturing transaction.",
+            SENTRY_AUTO_TRANSACTION_MAX_DURATION);
+        return YES;
+    }
+
+    if (_hub == nil) {
+        SENTRY_LOG_DEBUG(
+            @"Hub was nil for tracer %@, nothing to do.", _traceContext.traceId.sentryIdString);
+        return YES;
+    }
+
+    if (shouldCleanUp) {
+        [_hub.scope useSpan:^(id<SentrySpan> _Nullable span) {
+            if (span == self) {
+                [self->_hub.scope setSpan:nil];
+            }
+        }];
+    }
+
+    if (self.configuration.finishMustBeCalled && !self.wasFinishCalled) {
+        SENTRY_LOG_DEBUG(
+            @"Not capturing transaction because finish was not called before timing out.");
+        return YES;
+    }
+
+    @synchronized(_children) {
+        if (_configuration.idleTimeout > 0.0 && _children.count == 0) {
+            SENTRY_LOG_DEBUG(@"Was waiting for timeout for UI event trace but it had no children, "
+                             @"will not keep transaction.");
+            return YES;
+        }
+
+        for (id<SentrySpan> span in _children) {
+            if (!span.isFinished) {
+                [span finishWithStatus:unfinishedSpansFinishStatus];
+
+                // Unfinished children should have the same
+                // end timestamp as their parent transaction
+                span.timestamp = self.timestamp;
+            }
+        }
+
+        if ([self isAutoGeneratedTransaction]) {
+            [self trimEndTimestamp];
+        }
+    }
+
+    return NO;
 }
-#endif // SENTRY_TARGET_PROFILING_SUPPORTED
 
 - (void)trimEndTimestamp
 {
@@ -720,8 +759,8 @@ static BOOL appStartMeasurementRead;
     if (framesOfAllSpans.count > 0) {
         SentryDebugImageProvider *debugImageProvider
             = SentryDependencyContainer.sharedInstance.debugImageProvider;
-        transaction.debugMeta = [debugImageProvider getDebugImagesForFrames:framesOfAllSpans
-                                                                    isCrash:NO];
+        transaction.debugMeta =
+            [debugImageProvider getDebugImagesFromCacheForFrames:framesOfAllSpans];
     }
 
 #if SENTRY_HAS_UIKIT
@@ -824,7 +863,7 @@ static BOOL appStartMeasurementRead;
 
             // The backend calculates statistics on the number and size of debug images for app
             // start transactions. Therefore, we add all debug images here.
-            transaction.debugMeta = [self.debugImageProvider getDebugImagesCrashed:NO];
+            transaction.debugMeta = [self.debugImageProvider getDebugImagesFromCache];
         }
     }
 }
@@ -835,7 +874,8 @@ static BOOL appStartMeasurementRead;
     if (framesTracker.isRunning) {
         CFTimeInterval framesDelay = [framesTracker
                 getFramesDelay:self.startSystemTime
-            endSystemTimestamp:SentryDependencyContainer.sharedInstance.dateProvider.systemTime];
+            endSystemTimestamp:SentryDependencyContainer.sharedInstance.dateProvider.systemTime]
+                                         .delayDuration;
 
         if (framesDelay >= 0) {
             [self setDataValue:@(framesDelay) forKey:@"frames.delay"];

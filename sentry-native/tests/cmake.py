@@ -3,6 +3,8 @@ import os
 import shutil
 import subprocess
 import sys
+import platform
+from pathlib import Path
 
 import pytest
 
@@ -153,6 +155,20 @@ def cmake(cwd, targets, options=None):
     if "llvm-cov" in os.environ.get("RUN_ANALYZER", ""):
         flags = "-fprofile-instr-generate -fcoverage-mapping"
         configcmd.append("-DCMAKE_C_FLAGS='{}'".format(flags))
+
+        # Since we overwrite `CXXFLAGS` below, we must add the experimental library here for the GHA runner that builds
+        # sentry-native with LLVM clang for macOS (to run ASAN on macOS) rather than the version coming with XCode.
+        # TODO: remove this if the GHA runner image for macOS ever updates beyond llvm15.
+        if (
+            sys.platform == "darwin"
+            and os.environ.get("CC", "") == "clang"
+            and shutil.which("clang") == "/usr/local/opt/llvm@15/bin/clang"
+        ):
+            flags = (
+                flags
+                + " -L/usr/local/opt/llvm@15/lib/c++ -fexperimental-library -Wno-unused-command-line-argument"
+            )
+
         configcmd.append("-DCMAKE_CXX_FLAGS='{}'".format(flags))
     if "CMAKE_DEFINES" in os.environ:
         configcmd.extend(os.environ.get("CMAKE_DEFINES").split())
@@ -189,6 +205,14 @@ def cmake(cwd, targets, options=None):
         subprocess.run(buildcmd, cwd=cwd, check=True)
     except subprocess.CalledProcessError:
         raise pytest.fail.Exception("cmake build failed") from None
+
+    # check if the DLL and EXE artifacts contain version-information
+    if platform.system() == "Windows":
+        from tests.win_utils import check_binary_version
+
+        check_binary_version(Path(cwd) / "sentry.dll")
+        check_binary_version(Path(cwd) / "crashpad_wer.dll")
+        check_binary_version(Path(cwd) / "crashpad_handler.exe")
 
     if "code-checker" in os.environ.get("RUN_ANALYZER", ""):
         # For whatever reason, the compilation summary contains duplicate entries,

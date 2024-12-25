@@ -42,7 +42,7 @@ Using the `sentry-native` SDK in a standalone use case is currently an experimen
 ## Downloads
 
 The SDK can be downloaded from the [Releases] page, which also lists the
-changelog of every version.
+changelog of every version. We recommend using our release packages, but if you want to use this repo directly, please follow the [contribution guide](./CONTRIBUTING.md) to understand the setup better.
 
 [releases]: https://github.com/getsentry/sentry-native/releases
 
@@ -50,13 +50,12 @@ changelog of every version.
 
 The SDK bundle contains the following folders:
 
-- `external`: These are external projects which are consumed via
-  `git submodules`.
 - `include`: Contains the Sentry header file. Set the include path to this
   directory or copy the header file to your source tree so that it is available
   during the build.
 - `src`: Sources of the Sentry SDK required for building.
 - `ndk`: Sources for the Android NDK JNI layer.
+- `external`: These are vendored dependencies fetched via git submodules (use `git submodule update --init --recursive` if you use a git clone rather than a release).
 
 ## Platform and Feature Support
 
@@ -93,7 +92,9 @@ per platform, and can also be configured for cross-compilation.
 System-wide installation of the resulting sentry library is also possible via
 CMake.
 
-Building the Crashpad Backend requires a `C++14` compatible compiler.
+The prerequisites for building differ depending on the platform and backend. You will always need `CMake` to build the code. Additionally, when using the `crashpad` backend, `zlib` is required. On Linux and macOS, `libcurl` is a prerequisite. For more details, check out  the [contribution guide](./CONTRIBUTING.md).
+
+Building the Crashpad Backend [requires a `C++20` compatible compiler](https://github.com/getsentry/sentry-native/issues/1041). In particular, the standard library must support `std::ranges` for `mini_chromium` (a core library of `crashpad`).
 
 **Build example**:
 
@@ -192,19 +193,19 @@ using `cmake -D BUILD_SHARED_LIBS=OFF ..`.
   When using `sentry` as a static library, make sure to `#define SENTRY_BUILD_STATIC 1` before including the sentry header.
 
 - `SENTRY_PIC` (Default: ON):
-  By default, `sentry` is built as a position independent library.
+  By default, `sentry` is built as a position-independent library.
 
 - `SENTRY_EXPORT_SYMBOLS` (Default: ON):
-  By default, `sentry` exposes all symbols in the dynamic symbol table. You might want to disable it in case the program intends to `dlopen` third-party shared libraries and avoid symbol collisions.
+  By default, `sentry` exposes all symbols in the dynamic symbol table. You might want to disable it if the program intends to `dlopen` third-party shared libraries and avoid symbol collisions.
 
 - `SENTRY_BUILD_RUNTIMESTATIC` (Default: OFF):
   Enables linking with the static MSVC runtime. Has no effect if the compiler is not MSVC.
 
 - `SENTRY_LINK_PTHREAD` (Default: ON):
-  Links platform threads library like `pthread` on unix targets.
+  Links platform threads library like `pthread` on UNIX targets.
 
 - `SENTRY_BUILD_FORCE32` (Default: OFF):
-  Forces cross-compilation from 64-bit host to 32-bit target. Only has an effect on Linux.
+  Forces cross-compilation from 64-bit host to 32-bit target. Only affects Linux.
 
 - `CMAKE_SYSTEM_VERSION` (Default: depending on Windows SDK version):
   Sets up a minimal version of Windows where sentry-native can be guaranteed to run.
@@ -238,42 +239,23 @@ using `cmake -D BUILD_SHARED_LIBS=OFF ..`.
     only supported on Desktop OSs, and used as the default on Windows, Linux and macOS.
   - **breakpad**: This uses the in-process breakpad handler. It is currently
     only supported on Desktop OSs.
-  - **inproc**: A small in-process handler which is supported on all platforms,
-    and is used as default on Android.
+  - **inproc**: A small in-process handler that is supported on all platforms,
+    and is used as a default on Android.
   - **none**: This builds `sentry-native` without a backend, so it does not handle
-    crashes at all. It is primarily used for tests.
+    crashes. It is primarily used for tests.
 
 - `SENTRY_INTEGRATION_QT` (Default: OFF):
   Builds the Qt integration, which turns Qt log messages into breadcrumbs.
 
 - `SENTRY_BREAKPAD_SYSTEM` (Default: OFF):
-  This instructs the build system to use system-installed breakpad libraries instead of using the in-tree version.
+  This instructs the build system to use system-installed breakpad libraries instead of the in-tree version.
 
 - `SENTRY_TRANSPORT_COMPRESSION` (Default: OFF):
   Adds Gzip transport compression. Requires `zlib`.
 
-| Feature    | Windows | macOS | Linux | Android | iOS |
-| ---------- | ------- | ----- | ----- | ------- | --- |
-| Transports |         |       |       |         |     |
-| - curl     |         | ☑     | ☑     | (✓)     |     |
-| - winhttp  | ☑       |       |       |         |     |
-| - none     | ✓       | ✓     | ✓     | ☑       | ☑   |
-|            |         |       |       |         |     |
-| Backends   |         |       |       |         |     |
-| - inproc   | ✓       | ✓     | ✓     | ☑       |     |
-| - crashpad | ☑       | ☑     | ✓     |         |     |
-| - breakpad | ✓       | ✓     | ☑     | (✓)     | (✓) |
-| - none     | ✓       | ✓     | ✓     | ✓       |     |
-
-Legend:
-
-- ☑ default
-- ✓ supported
-- unsupported
-
 - `SENTRY_FOLDER` (Default: not defined):
-  Sets the sentry-native projects folder name for generators which support project hierarchy (like Microsoft Visual Studio).
-  To use this feature you need to enable hierarchy via [`USE_FOLDERS` property](https://cmake.org/cmake/help/latest/prop_gbl/USE_FOLDERS.html)
+  Sets the sentry-native projects folder name for generators that support project hierarchy (like Microsoft Visual Studio).
+  To use this feature, you need to enable hierarchy via [`USE_FOLDERS` property](https://cmake.org/cmake/help/latest/prop_gbl/USE_FOLDERS.html)
 
 - `CRASHPAD_ENABLE_STACKTRACE` (Default: OFF):
   This enables client-side stackwalking when using the crashpad backend. Stack unwinding will happen on the client's machine
@@ -281,8 +263,34 @@ Legend:
   Note that this feature is still experimental.
 
 - `SENTRY_SDK_NAME` (Default: sentry.native or sentry.native.android):
-  Sets the SDK name that should be included in the reported events. If you're overriding this, make sure to also define
+  Sets the SDK name that should be included in the reported events. If you're overriding this, also define
   the same value using `target_compile_definitions()` on your own targets that include `sentry.h`.
+
+### Support Matrix
+
+| Feature    | Windows | macOS | Linux | Android | iOS   |
+| ---------- | ------- | ----- | ----- | ------- | ----- |
+| Transports |         |       |       |         |       |
+| - curl     |         | ☑     | ☑     | (✓)***  |       |
+| - winhttp  | ☑       |       |       |         |       |
+| - none     | ✓       | ✓     | ✓     | ☑       | ☑     |
+|            |         |       |       |         |       |
+| Backends   |         |       |       |         |       |
+| - crashpad | ☑       | ☑     | ☑     |         |       |
+| - breakpad | ✓       | ✓     | ✓     | (✓)**   | (✓)** |
+| - inproc   | ✓       | (✓)*  | ✓     | ☑       |       |
+| - none     | ✓       | ✓     | ✓     | ✓       |       |
+
+Legend:
+
+- ☑ default
+- ✓ supported
+- (✓) supported with limitations
+- `*`: `inproc` has not produced valid stack traces on macOS since version 13 ("Ventura"). Tracking: https://github.com/getsentry/sentry-native/issues/906
+- `**`: `breakpad` on Android and iOS builds and should work according to upstream but is untested.
+- `***`: `curl` as a transport works on Android but isn't used in any supported configuration to reduce the size of our artifacts.
+
+In addition to platform support, the "Advanced Usage" section of the SDK docs now [describes the tradeoffs](https://docs.sentry.io/platforms/native/advanced-usage/backend-tradeoffs/) involved in choosing a suitable backend for a particular use case.
 
 ### Build Targets
 

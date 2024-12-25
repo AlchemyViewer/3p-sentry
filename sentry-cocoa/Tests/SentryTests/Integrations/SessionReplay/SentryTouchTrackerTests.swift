@@ -66,8 +66,8 @@ class SentryTouchTrackerTests: XCTestCase {
     
     private var referenceDate = Date(timeIntervalSinceReferenceDate: 0)
     
-    func getSut() -> SentryTouchTracker {
-        return SentryTouchTracker(dateProvider: dateprovider, scale: 1)
+    func getSut(dispatchQueue: SentryDispatchQueueWrapper = TestSentryDispatchQueueWrapper()) -> SentryTouchTracker {
+        return SentryTouchTracker(dateProvider: dateprovider, scale: 1, dispatchQueue: dispatchQueue)
     }
     
     func testTrackTouchFromEvent() {
@@ -140,7 +140,7 @@ class SentryTouchTrackerTests: XCTestCase {
         XCTAssertEqual(data?["source"] as? Int, 2)
     }
     
-    func testTrackTouchEventKeepSameIdAccrossEvents() {
+    func testTrackTouchEventKeepSameIdAccrossEvents() throws {
         let sut = getSut()
         let event = MockUIEvent(timestamp: 3)
         let touch = MockUITouch(phase: .began, location: CGPoint(x: 100, y: 100))
@@ -154,10 +154,10 @@ class SentryTouchTrackerTests: XCTestCase {
         sut.trackTouchFrom(event: event)
         
         let result = sut.replayEvents(from: referenceDate, until: referenceDate.addingTimeInterval(5))
-        let firstEventFirstTouch = result[0].data
-        let firstEventSecondTouch = result[1].data
-        let secondEventFirstTouch = result[2].data
-        let secondEventSecondTouch = result[3].data
+        let firstEventFirstTouch = try XCTUnwrap(result.first).data
+        let firstEventSecondTouch = try XCTUnwrap(result.element(at: 1)).data
+        let secondEventFirstTouch = try XCTUnwrap(result.element(at: 2)).data
+        let secondEventSecondTouch = try XCTUnwrap(result.element(at: 3)).data
         
         XCTAssertEqual(firstEventFirstTouch?["pointerId"] as? Int, secondEventFirstTouch?["pointerId"] as? Int)
         XCTAssertEqual(firstEventSecondTouch?["pointerId"] as? Int, secondEventSecondTouch?["pointerId"] as? Int)
@@ -300,5 +300,38 @@ class SentryTouchTrackerTests: XCTestCase {
         XCTAssertEqual(positions?.count, 3)
     }
     
+    func testLock() {
+        let sut = getSut(dispatchQueue: SentryDispatchQueueWrapper())
+        
+        let addExp = expectation(description: "add")
+        let removeExp = expectation(description: "remove")
+        let readExp = expectation(description: "read")
+        
+        DispatchQueue.global().async {
+            for i in 0..<1_000 {
+                let event = MockUIEvent(timestamp: Double(i))
+                let touch = MockUITouch(phase: .ended, location: CGPoint(x: 100, y: 100))
+                event.addTouch(touch)
+                sut.trackTouchFrom(event: event)
+            }
+            addExp.fulfill()
+        }
+        
+        DispatchQueue.global().async {
+            for _ in 0..<1_000 {
+                sut.flushFinishedEvents()
+            }
+            removeExp.fulfill()
+        }
+        
+        DispatchQueue.global().async {
+            for _ in 0..<1_000 {
+                _ = sut.replayEvents(from: self.referenceDate, until: self.referenceDate.addingTimeInterval(10_000.0))
+            }
+            readExp.fulfill()
+        }
+        
+        wait(for: [addExp, removeExp, readExp], timeout: 1)
+    }
 }
 #endif

@@ -59,7 +59,19 @@ def assert_meta(
     sdk_override=None,
 ):
     event = envelope.get_event()
+    assert_event_meta(
+        event, release, integration, transaction, transaction_data, sdk_override
+    )
 
+
+def assert_event_meta(
+    event,
+    release="test-example-release",
+    integration=None,
+    transaction="test-transaction",
+    transaction_data=None,
+    sdk_override=None,
+):
     extra = {
         "extra stuff": "some value",
         "…unicode key…": "őá…–🤮🚀¿ 한글 테스트",
@@ -78,9 +90,9 @@ def assert_meta(
     }
     expected_sdk = {
         "name": "sentry.native",
-        "version": "0.7.6",
+        "version": "0.7.17",
         "packages": [
-            {"name": "github:getsentry/sentry-native", "version": "0.7.6"},
+            {"name": "github:getsentry/sentry-native", "version": "0.7.17"},
         ],
     }
     if is_android:
@@ -102,6 +114,8 @@ def assert_meta(
                 event["contexts"]["os"],
                 {"name": "Linux", "version": version, "build": build},
             )
+            assert "distribution_name" in event["contexts"]["os"]
+            assert "distribution_version" in event["contexts"]["os"]
         elif sys.platform == "darwin":
             version = platform.mac_ver()[0].split(".")
             if len(version) < 3:
@@ -193,8 +207,9 @@ def assert_minidump(envelope):
     assert minidump.payload.bytes.startswith(b"MDMP")
 
 
-def assert_timestamp(ts, now=datetime.now(UTC)):
-    assert ts[:11] == now.isoformat()[:11]
+def assert_timestamp(ts):
+    elapsed_time = datetime.now(UTC) - datetime.fromisoformat(ts)
+    assert elapsed_time.total_seconds() < 10
 
 
 def assert_event(envelope, message="Hello World!"):
@@ -316,8 +331,7 @@ def assert_crashpad_upload(req):
     attachments = _load_crashpad_attachments(msg)
 
     assert_overflowing_breadcrumb(attachments)
-    assert attachments.event["level"] == "fatal"
-
+    assert_event_meta(attachments.event, integration="crashpad")
     assert any(
         b'name="upload_file_minidump"' in part.as_bytes()
         and b"\n\nMDMP" in part.as_bytes()

@@ -14,6 +14,7 @@ class TestData {
     }
     static let sdk = ["name": SentryMeta.sdkName, "version": SentryMeta.versionString]
     static let context: [String: [String: Any]] = ["context": ["c": "a", "date": timestamp]]
+    static let traceContext: [String: [String: Any]] = ["trace": ["trace_id": "1234567890", "span_id": "1234567890"]]
     
     static let malformedURLString = "http://example.com:-80/"
     
@@ -63,7 +64,6 @@ class TestData {
         user.email = "user@sentry.io"
         user.username = "user123"
         user.ipAddress = "127.0.0.1"
-        user.segment = "segmentA"
         user.name = "User"
         user.geo = geo
         user.data = ["some": ["data": "data", "date": timestamp] as [String: Any]] 
@@ -296,6 +296,8 @@ class TestData {
         let crumb2 = TestData.crumb
         crumb2.message = "Crumb 2"
         scope.addBreadcrumb(crumb2)
+        
+        scope.span = nil
         
         return scope
     }

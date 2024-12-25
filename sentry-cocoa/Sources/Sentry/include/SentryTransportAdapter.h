@@ -39,11 +39,17 @@ SENTRY_NO_INIT
      traceContext:(nullable SentryTraceContext *)traceContext
       attachments:(NSArray<SentryAttachment *> *)attachments;
 
+- (void)storeEvent:(SentryEvent *)event traceContext:(nullable SentryTraceContext *)traceContext;
+
 - (void)sendUserFeedback:(SentryUserFeedback *)userFeedback NS_SWIFT_NAME(send(userFeedback:));
 
 - (void)sendEnvelope:(SentryEnvelope *)envelope NS_SWIFT_NAME(send(envelope:));
 
 - (void)recordLostEvent:(SentryDataCategory)category reason:(SentryDiscardReason)reason;
+
+- (void)recordLostEvent:(SentryDataCategory)category
+                 reason:(SentryDiscardReason)reason
+               quantity:(NSUInteger)quantity;
 
 - (void)flush:(NSTimeInterval)timeout;
 

@@ -47,15 +47,17 @@ android {
         getByName("release") {
             isMinifyEnabled = true
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
             )
             signingConfig = signingConfigs.getByName("debug") // to be able to run release mode
             isShrinkResources = true
 
             addManifestPlaceholders(
                 mapOf(
-                    "sentryDebug" to false, "sentryEnvironment" to "release"
-                )
+                    "sentryDebug" to false,
+                    "sentryEnvironment" to "release",
+                ),
             )
         }
     }
@@ -63,6 +65,12 @@ android {
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_1_8.toString()
     }
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+    ndkVersion = "27.0.12077973"
 }
 
 dependencies {

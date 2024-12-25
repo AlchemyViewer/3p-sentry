@@ -8,11 +8,15 @@
 #    include <mach/mach.h>
 #endif
 #ifdef SENTRY_PLATFORM_WINDOWS
+#    include "sentry_os.h"
 #    include <winnt.h>
 #else
 #    include <sys/time.h>
 #    include <time.h>
 #endif
+
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 /**
  * This represents a URL parsed into its different parts.
@@ -106,10 +110,7 @@ sentry__usec_time(void)
     // Contains a 64-bit value representing the number of 100-nanosecond
     // intervals since January 1, 1601 (UTC).
     FILETIME file_time;
-    SYSTEMTIME system_time;
-    GetSystemTime(&system_time);
-    SystemTimeToFileTime(&system_time, &file_time);
-
+    sentry__get_system_time(&file_time);
     uint64_t timestamp = (uint64_t)file_time.dwLowDateTime
         + ((uint64_t)file_time.dwHighDateTime << 32);
     timestamp -= 116444736000000000LL; // convert to unix epoch

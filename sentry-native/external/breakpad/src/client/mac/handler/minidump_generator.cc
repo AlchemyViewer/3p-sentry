@@ -200,6 +200,58 @@ void MinidumpGenerator::SetTaskContext(breakpad_ucontext_t* task_context) {
   task_context_ = task_context;
 }
 
+bool MinidumpGenerator::GetThreadContext(mach_port_t thread_id, breakpad_ucontext_t* context)
+{
+  breakpad_thread_state_data_t state;
+  mach_msg_type_number_t state_count
+      = static_cast<mach_msg_type_number_t>(sizeof(state));
+
+  if (!GetThreadState(thread_id, state, &state_count))
+    return false;
+
+#ifdef HAS_X86_SUPPORT
+  MDRawContextAMD64 amd64_ctx;
+  GetContextX86_64(state, &amd64_ctx);
+
+#define CopyReg(reg) context->uc_mcontext->__ss.__##reg = amd64_ctx.reg
+
+  CopyReg(rax);
+  CopyReg(rbx);
+  CopyReg(rcx);
+  CopyReg(rdx);
+  CopyReg(rdi);
+  CopyReg(rsi);
+  CopyReg(rbp);
+  CopyReg(rsp);
+  CopyReg(r8);
+  CopyReg(r9);
+  CopyReg(r10);
+  CopyReg(r11);
+  CopyReg(r12);
+  CopyReg(r13);
+  CopyReg(r14);
+  CopyReg(r15);
+  CopyReg(rip);
+  CopyReg(cs);
+  CopyReg(fs);
+  CopyReg(gs);
+  context->uc_mcontext->__ss.__rflags = amd64_ctx.eflags;
+#undef CopyReg
+#endif
+#ifdef HAS_ARM64_SUPPORT
+  MDRawContextARM64_Old arm64_ctx;
+  GetContextARM64(state, &arm64_ctx);
+
+  std::copy_n(std::begin(arm64_ctx.iregs), std::size(context->uc_mcontext->__ss.__x), std::begin(context->uc_mcontext->__ss.__x));
+  context->uc_mcontext->__ss.__fp = arm64_ctx.iregs[MD_CONTEXT_ARM64_REG_FP];
+  context->uc_mcontext->__ss.__lr = arm64_ctx.iregs[MD_CONTEXT_ARM64_REG_LR];
+  context->uc_mcontext->__ss.__sp = arm64_ctx.iregs[MD_CONTEXT_ARM64_REG_SP];
+  context->uc_mcontext->__ss.__pc = arm64_ctx.iregs[MD_CONTEXT_ARM64_REG_PC];
+  context->uc_mcontext->__ss.__cpsr = arm64_ctx.cpsr;
+#endif
+  return true;
+}
+
 string MinidumpGenerator::UniqueNameInDirectory(const string& dir,
                                                 string* unique_name) {
   CFUUIDRef uuid = CFUUIDCreate(NULL);
@@ -559,6 +611,15 @@ MinidumpGenerator::WriteContextARM64(breakpad_thread_state_data_t state,
 
   *register_location = context.location();
   MDRawContextARM64_Old* context_ptr = context.get();
+  GetContextARM64(state, context_ptr);
+  return true;
+}
+
+void MinidumpGenerator::GetContextARM64(breakpad_thread_state_data_t state,
+                     MDRawContextARM64_Old* context_ptr) {
+  arm_thread_state64_t* machine_state =
+      reinterpret_cast<arm_thread_state64_t*>(state);
+
   context_ptr->context_flags = MD_CONTEXT_ARM64_FULL_OLD;
 
 #define AddGPR(a)                                                              \
@@ -600,8 +661,6 @@ MinidumpGenerator::WriteContextARM64(breakpad_thread_state_data_t state,
   AddGPR(27);
   AddGPR(28);
 #undef AddGPR
-
-  return true;
 }
 #endif
 
@@ -851,14 +910,19 @@ bool MinidumpGenerator::WriteContextX86_64(
     breakpad_thread_state_data_t state,
     MDLocationDescriptor* register_location) {
   TypedMDRVA<MDRawContextAMD64> context(&writer_);
-  x86_thread_state64_t* machine_state =
-      reinterpret_cast<x86_thread_state64_t*>(state);
-
   if (!context.Allocate())
     return false;
 
   *register_location = context.location();
   MDRawContextAMD64* context_ptr = context.get();
+  GetContextX86_64(state, context_ptr);
+  return true;
+}
+
+void MinidumpGenerator::GetContextX86_64(breakpad_thread_state_data_t state,
+                      MDRawContextAMD64* context_ptr) {
+  x86_thread_state64_t* machine_state =
+      reinterpret_cast<x86_thread_state64_t*>(state);
 
 #define AddReg(a) context_ptr->a = static_cast<__typeof__(context_ptr->a)>( \
     REGISTER_FROM_THREADSTATE(machine_state, a))
@@ -890,8 +954,6 @@ bool MinidumpGenerator::WriteContextX86_64(
   AddReg(fs);
   AddReg(gs);
 #undef AddReg
-
-  return true;
 }
 #endif
 

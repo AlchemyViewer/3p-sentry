@@ -1,8 +1,18 @@
 import Foundation
-import Sentry
+@testable import Sentry
 
 public func clearTestState() {
     TestCleanup.clearTestState()
+}
+
+public func resetUserDefaults() {
+    if let appDomain = Bundle.main.bundleIdentifier {
+        UserDefaults.standard.removePersistentDomain(forName: appDomain)
+        // Although the Apple docs state this shouldn't be used we need it
+        // to avoid race conditions in tests for UserDefaults. Not calling
+        // this can lead to flaky tests.
+        UserDefaults.standard.synchronize()
+    }
 }
 
 @objcMembers
@@ -43,9 +53,12 @@ class TestCleanup: NSObject {
         _sentry_threadUnsafe_traceProfileTimeoutTimer = nil
         SentryTraceProfiler.getCurrentProfiler()?.stop(for: SentryProfilerTruncationReason.normal)
         SentryTraceProfiler.resetConcurrencyTracking()
-        SentryContinuousProfiler.stop()
         removeAppLaunchProfilingConfigFile()
         sentry_stopAndDiscardLaunchProfileTracer()
+        
+        if SentryContinuousProfiler.isCurrentlyProfiling() {
+            SentryContinuousProfiler.stopTimerAndCleanup()
+        }
 #endif // os(iOS) || os(macOS) || targetEnvironment(macCatalyst)
 
         #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)

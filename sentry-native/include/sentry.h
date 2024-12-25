@@ -30,7 +30,7 @@ extern "C" {
 #        define SENTRY_SDK_NAME "sentry.native"
 #    endif
 #endif
-#define SENTRY_SDK_VERSION "0.7.6"
+#define SENTRY_SDK_VERSION "0.7.17"
 #define SENTRY_SDK_USER_AGENT SENTRY_SDK_NAME "/" SENTRY_SDK_VERSION
 
 /* common platform detection */
@@ -769,6 +769,14 @@ typedef enum {
 } sentry_user_consent_t;
 
 /**
+ * The crash handler strategy.
+ */
+typedef enum {
+    SENTRY_HANDLER_STRATEGY_DEFAULT = 0,
+    SENTRY_HANDLER_STRATEGY_CHAIN_AT_START = 1,
+} sentry_handler_strategy_t;
+
+/**
  * Creates a new options struct.
  * Can be freed with `sentry_options_free`.
  */
@@ -964,9 +972,35 @@ SENTRY_API void sentry_options_set_dist_n(
 SENTRY_API const char *sentry_options_get_dist(const sentry_options_t *opts);
 
 /**
- * Configures the http proxy.
+ * Configures the proxy.
  *
- * The given proxy has to include the full scheme, eg. `http://some.proxy/`.
+ * The given proxy has to include the full scheme,
+ * eg. `http://some.proxy/` or `socks5://some.proxy/`.
+ *
+ * Not every transport behaves the same way when configuring a proxy.
+ * On Windows if a transport can't connect to the proxy it will fall back on a
+ * connection without proxy. This is also true for the crashpad_handler
+ * transport on macOS for a socks proxy, but not for a http proxy.
+ * All transports that use libcurl (Linux and the Native SDK transport on macOS)
+ * will honor the proxy settings and not fall back.
+ */
+SENTRY_API void sentry_options_set_proxy(
+    sentry_options_t *opts, const char *proxy);
+SENTRY_API void sentry_options_set_proxy_n(
+    sentry_options_t *opts, const char *proxy, size_t proxy_len);
+
+/**
+ * Returns the configured proxy.
+ */
+SENTRY_API const char *sentry_options_get_proxy(const sentry_options_t *opts);
+
+/**
+ * Configures the proxy.
+ *
+ * This is a **deprecated** alias for `sentry_options_set_proxy(_n)`.
+ *
+ * The given proxy has to include the full scheme,
+ * eg. `http://some.proxy/.
  */
 SENTRY_API void sentry_options_set_http_proxy(
     sentry_options_t *opts, const char *proxy);
@@ -974,7 +1008,7 @@ SENTRY_API void sentry_options_set_http_proxy_n(
     sentry_options_t *opts, const char *proxy, size_t proxy_len);
 
 /**
- * Returns the configured http proxy.
+ * Returns the configured proxy.
  */
 SENTRY_API const char *sentry_options_get_http_proxy(
     const sentry_options_t *opts);
@@ -1363,9 +1397,22 @@ SENTRY_API sentry_user_consent_t sentry_user_consent_get(void);
 SENTRY_API sentry_uuid_t sentry_capture_event(sentry_value_t event);
 
 /**
+ * Allows capturing independently created minidumps.
+ *
+ * This generates a fatal error event, includes the scope and attachments.
+ * If the event isn't dropped by a before-send hook, the minidump is attached
+ * and the event is sent.
+ */
+SENTRY_API void sentry_capture_minidump(const char *path);
+SENTRY_API void sentry_capture_minidump_n(const char *path, size_t path_len);
+
+/**
  * Captures an exception to be handled by the backend.
  *
  * This is safe to be called from a crashing thread and may not return.
+ *
+ * Note: The `crashpad` client currently supports this only on Windows. `inproc`
+ *       and `breakpad` support it on all platforms.
  */
 SENTRY_EXPERIMENTAL_API void sentry_handle_exception(
     const sentry_ucontext_t *uctx);
@@ -1478,6 +1525,36 @@ SENTRY_EXPERIMENTAL_API void sentry_options_set_traces_sample_rate(
  */
 SENTRY_EXPERIMENTAL_API double sentry_options_get_traces_sample_rate(
     sentry_options_t *opts);
+
+#ifdef SENTRY_PLATFORM_LINUX
+
+/**
+ * Returns the currently set strategy for the handler.
+ *
+ * This option does only work for the `inproc` backend on `Linux` and `Android`.
+ *
+ * The main use-case is when the Native SDK is used in the context of the
+ * CLR/Mono runtimes which convert some POSIX signals into managed-code
+ * exceptions and discontinue the signal chain.
+ *
+ * If this happens and we invoke the previous handler at the end (i.e., after
+ * our handler processed the signal, which is the default strategy) we will end
+ * up sending a native crash in addition to the managed code exception (which
+ * will either generate another crash-event if uncaught or could be handled in
+ * the managed code and neither terminate the application nor create a crash
+ * event). To correctly process the signals of CLR/Mono applications, we must
+ * invoke the runtime handler at the start of our handler.
+ */
+SENTRY_EXPERIMENTAL_API sentry_handler_strategy_t
+sentry_options_get_handler_strategy(const sentry_options_t *opts);
+
+/**
+ * Sets the handler strategy.
+ */
+SENTRY_EXPERIMENTAL_API void sentry_options_set_handler_strategy(
+    sentry_options_t *opts, sentry_handler_strategy_t handler_strategy);
+
+#endif // SENTRY_PLATFORM_LINUX
 
 /* -- Session APIs -- */
 
@@ -1659,6 +1736,16 @@ SENTRY_EXPERIMENTAL_API void sentry_transaction_context_update_from_header_n(
  */
 SENTRY_EXPERIMENTAL_API sentry_transaction_t *sentry_transaction_start(
     sentry_transaction_context_t *tx_cxt, sentry_value_t sampling_ctx);
+/**
+ * Also starts a transaction like the regular `sentry_transaction_start`
+ * function, but has an additional timestamp parameter to let the user provide
+ * explicit timings.
+ *
+ * The timestamp should be provided in microseconds since the Unix epoch.
+ */
+SENTRY_EXPERIMENTAL_API sentry_transaction_t *sentry_transaction_start_ts(
+    sentry_transaction_context_t *tx_cxt, sentry_value_t sampling_ctx,
+    uint64_t timestamp);
 
 /**
  * Finishes and sends a Transaction to sentry. The event ID of the Transaction
@@ -1671,6 +1758,15 @@ SENTRY_EXPERIMENTAL_API sentry_transaction_t *sentry_transaction_start(
  */
 SENTRY_EXPERIMENTAL_API sentry_uuid_t sentry_transaction_finish(
     sentry_transaction_t *tx);
+/**
+ * Also finishes a transaction like the regular `sentry_transaction_finish`
+ * function, but has an additional timestamp parameter to let the user provide
+ * explicit timings.
+ *
+ * The timestamp should be provided in microseconds since the Unix epoch.
+ */
+SENTRY_EXPERIMENTAL_API sentry_uuid_t sentry_transaction_finish_ts(
+    sentry_transaction_t *tx, uint64_t timestamp);
 
 /**
  * Sets the Transaction so any Events sent while the Transaction
@@ -1739,6 +1835,19 @@ SENTRY_EXPERIMENTAL_API sentry_span_t *sentry_transaction_start_child(
 SENTRY_EXPERIMENTAL_API sentry_span_t *sentry_transaction_start_child_n(
     sentry_transaction_t *parent, const char *operation, size_t operation_len,
     const char *description, size_t description_len);
+/**
+ * Also starts a span like the regular `sentry_transaction_start_child_ts`
+ * functions, but has an additional timestamp parameter to let the user provide
+ * explicit timings.
+ *
+ * The timestamp should be provided in microseconds since the Unix epoch.
+ */
+SENTRY_EXPERIMENTAL_API sentry_span_t *sentry_transaction_start_child_ts(
+    sentry_transaction_t *parent, const char *operation,
+    const char *description, uint64_t timestamp);
+SENTRY_EXPERIMENTAL_API sentry_span_t *sentry_transaction_start_child_ts_n(
+    sentry_transaction_t *parent, const char *operation, size_t operation_len,
+    const char *description, size_t description_len, uint64_t timestamp);
 
 /**
  * Starts a new Span.
@@ -1775,6 +1884,19 @@ SENTRY_EXPERIMENTAL_API sentry_span_t *sentry_span_start_child(
 SENTRY_EXPERIMENTAL_API sentry_span_t *sentry_span_start_child_n(
     sentry_span_t *parent, const char *operation, size_t operation_len,
     const char *description, size_t description_len);
+/**
+ * Also starts a span like the regular `sentry_span_start_child_ts` functions,
+ * but has an additional timestamp parameter to let the user provide explicit
+ * timings.
+ *
+ * The timestamp should be provided in microseconds since the Unix epoch.
+ */
+SENTRY_EXPERIMENTAL_API sentry_span_t *sentry_span_start_child_ts(
+    sentry_span_t *parent, const char *operation, const char *description,
+    uint64_t timestamp);
+SENTRY_EXPERIMENTAL_API sentry_span_t *sentry_span_start_child_ts_n(
+    sentry_span_t *parent, const char *operation, size_t operation_len,
+    const char *description, size_t description_len, uint64_t timestamp);
 
 /**
  * Finishes a Span.
@@ -1787,6 +1909,14 @@ SENTRY_EXPERIMENTAL_API sentry_span_t *sentry_span_start_child_n(
  * span.
  */
 SENTRY_EXPERIMENTAL_API void sentry_span_finish(sentry_span_t *span);
+/**
+ * Also finishes a span like the regular `sentry_span_finish` function, but has
+ * an additional timestamp parameter to let the user provide explicit timings.
+ *
+ * The timestamp should be provided in microseconds since the Unix epoch.
+ */
+SENTRY_EXPERIMENTAL_API void sentry_span_finish_ts(
+    sentry_span_t *span, uint64_t timestamp);
 
 /**
  * Sets a tag on a Transaction to the given string value.

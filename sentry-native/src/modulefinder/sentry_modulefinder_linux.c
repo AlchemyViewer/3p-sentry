@@ -7,6 +7,7 @@
 #include "sentry_path.h"
 #include "sentry_string.h"
 #include "sentry_sync.h"
+#include "sentry_utils.h"
 #include "sentry_value.h"
 
 #include <arpa/inet.h>
@@ -30,8 +31,6 @@ process_vm_readv(pid_t __pid, const struct iovec *__local_iov,
         __remote_iov, __remote_iov_count, __flags);
 }
 #endif
-
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 #define ENSURE(Ptr)                                                            \
     if (!Ptr)                                                                  \
@@ -303,10 +302,11 @@ get_code_id_from_program_header(const sentry_module_t *module, size_t *size_out)
         Elf64_Ehdr elf;
         ENSURE(sentry__module_read_safely(&elf, module, 0, sizeof(Elf64_Ehdr)));
 
-        for (int i = 0; i < elf.e_phnum; i++) {
+        for (uint32_t i = 0; i < elf.e_phnum; i++) {
             Elf64_Phdr header;
             ENSURE(sentry__module_read_safely(&header, module,
-                elf.e_phoff + elf.e_phentsize * i, sizeof(Elf64_Phdr)));
+                elf.e_phoff + (uint64_t)elf.e_phentsize * i,
+                sizeof(Elf64_Phdr)));
 
             // we are only interested in notes
             if (header.p_type != PT_NOTE) {
@@ -326,10 +326,11 @@ get_code_id_from_program_header(const sentry_module_t *module, size_t *size_out)
         Elf32_Ehdr elf;
         ENSURE(sentry__module_read_safely(&elf, module, 0, sizeof(Elf32_Ehdr)));
 
-        for (int i = 0; i < elf.e_phnum; i++) {
+        for (uint32_t i = 0; i < elf.e_phnum; i++) {
             Elf32_Phdr header;
             ENSURE(sentry__module_read_safely(&header, module,
-                elf.e_phoff + elf.e_phentsize * i, sizeof(Elf32_Phdr)));
+                elf.e_phoff + (uint64_t)elf.e_phentsize * i,
+                sizeof(Elf32_Phdr)));
 
             // we are only interested in notes
             if (header.p_type != PT_NOTE) {
@@ -360,13 +361,14 @@ fail:
                                                                                \
         Elf64_Shdr strheader;                                                  \
         ENSURE(sentry__module_read_safely(&strheader, module,                  \
-            elf.e_shoff + elf.e_shentsize * elf.e_shstrndx,                    \
+            elf.e_shoff + (uint64_t)elf.e_shentsize * elf.e_shstrndx,          \
             sizeof(Elf64_Shdr)));                                              \
                                                                                \
-        for (int i = 0; i < elf.e_shnum; i++) {                                \
+        for (uint32_t i = 0; i < elf.e_shnum; i++) {                           \
             Elf64_Shdr header;                                                 \
             ENSURE(sentry__module_read_safely(&header, module,                 \
-                elf.e_shoff + elf.e_shentsize * i, sizeof(Elf64_Shdr)));       \
+                elf.e_shoff + (uint64_t)elf.e_shentsize * i,                   \
+                sizeof(Elf64_Shdr)));                                          \
                                                                                \
             char name[6];                                                      \
             ENSURE(sentry__module_read_safely(name, module,                    \
@@ -382,13 +384,14 @@ fail:
                                                                                \
         Elf32_Shdr strheader;                                                  \
         ENSURE(sentry__module_read_safely(&strheader, module,                  \
-            elf.e_shoff + elf.e_shentsize * elf.e_shstrndx,                    \
+            elf.e_shoff + (uint64_t)elf.e_shentsize * elf.e_shstrndx,          \
             sizeof(Elf32_Shdr)));                                              \
                                                                                \
-        for (int i = 0; i < elf.e_shnum; i++) {                                \
+        for (uint32_t i = 0; i < elf.e_shnum; i++) {                           \
             Elf32_Shdr header;                                                 \
             ENSURE(sentry__module_read_safely(&header, module,                 \
-                elf.e_shoff + elf.e_shentsize * i, sizeof(Elf32_Shdr)));       \
+                elf.e_shoff + (uint64_t)elf.e_shentsize * i,                   \
+                sizeof(Elf32_Shdr)));                                          \
                                                                                \
             char name[6];                                                      \
             ENSURE(sentry__module_read_safely(name, module,                    \

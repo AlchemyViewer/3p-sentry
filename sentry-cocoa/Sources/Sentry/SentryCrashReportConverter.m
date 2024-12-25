@@ -1,4 +1,5 @@
 #import "SentryCrashReportConverter.h"
+#import "SentryBreadcrumb+Private.h"
 #import "SentryBreadcrumb.h"
 #import "SentryCrashStackCursor.h"
 #import "SentryDateUtils.h"
@@ -16,8 +17,7 @@
 #import "SentryThread.h"
 #import "SentryUser.h"
 
-@interface
-SentryCrashReportConverter ()
+@interface SentryCrashReportConverter ()
 
 @property (nonatomic, strong) NSDictionary *report;
 @property (nonatomic, assign) NSInteger crashedThreadIndex;
@@ -25,6 +25,7 @@ SentryCrashReportConverter ()
 @property (nonatomic, strong) NSArray *binaryImages;
 @property (nonatomic, strong) NSArray *threads;
 @property (nonatomic, strong) NSDictionary *systemContext;
+@property (nonatomic, strong) NSDictionary *applicationStats;
 @property (nonatomic, strong) NSString *diagnosis;
 @property (nonatomic, strong) SentryInAppLogic *inAppLogic;
 
@@ -38,7 +39,6 @@ SentryCrashReportConverter ()
     if (self) {
         self.report = report;
         self.inAppLogic = inAppLogic;
-        self.systemContext = report[@"system"];
 
         NSDictionary *userContextUnMerged = report[@"user"];
         if (userContextUnMerged == nil) {
@@ -72,6 +72,11 @@ SentryCrashReportConverter ()
         self.diagnosis = crashContext[@"diagnosis"];
         self.exceptionContext = crashContext[@"error"];
         [self initThreads:crashContext[@"threads"]];
+
+        self.systemContext = report[@"system"];
+        if (self.systemContext[@"application_stats"] != nil) {
+            self.applicationStats = self.systemContext[@"application_stats"];
+        }
     }
     return self;
 }
@@ -112,7 +117,23 @@ SentryCrashReportConverter ()
 
         event.dist = self.userContext[@"dist"];
         event.environment = self.userContext[@"environment"];
-        event.context = self.userContext[@"context"];
+
+        NSMutableDictionary *mutableContext =
+            [[NSMutableDictionary alloc] initWithDictionary:self.userContext[@"context"]];
+        if (self.userContext[@"traceContext"]) {
+            mutableContext[@"trace"] = self.userContext[@"traceContext"];
+        }
+
+        NSMutableDictionary *appContext;
+        if (mutableContext[@"app"] != nil) {
+            appContext = [mutableContext[@"app"] mutableCopy];
+        } else {
+            appContext = [NSMutableDictionary new];
+        }
+        appContext[@"in_foreground"] = self.applicationStats[@"application_in_foreground"];
+        mutableContext[@"app"] = appContext;
+        event.context = mutableContext;
+
         event.extra = self.userContext[@"extra"];
         event.tags = self.userContext[@"tags"];
         //    event.level we do not set the level here since this always resulted
@@ -127,12 +148,11 @@ SentryCrashReportConverter ()
         // We want to set the release and dist to the version from the crash report
         // itself otherwise it can happend that we have two different version when
         // the app crashes right before an app update #218 #219
-        NSDictionary *appContext = event.context[@"app"];
         if (nil == event.releaseName && appContext[@"app_identifier"] && appContext[@"app_version"]
             && appContext[@"app_build"]) {
             event.releaseName =
                 [NSString stringWithFormat:@"%@@%@+%@", appContext[@"app_identifier"],
-                          appContext[@"app_version"], appContext[@"app_build"]];
+                    appContext[@"app_version"], appContext[@"app_build"]];
         }
 
         if (nil == event.dist && appContext[@"app_build"]) {
@@ -171,6 +191,7 @@ SentryCrashReportConverter ()
                      category:storedCrumb[@"category"]];
             crumb.message = storedCrumb[@"message"];
             crumb.type = storedCrumb[@"type"];
+            crumb.origin = storedCrumb[@"origin"];
             crumb.timestamp = sentry_fromIso8601String(storedCrumb[@"timestamp"]);
             crumb.data = storedCrumb[@"data"];
             [breadcrumbs addObject:crumb];
@@ -369,16 +390,16 @@ SentryCrashReportConverter ()
     } else if ([exceptionType isEqualToString:@"mach"]) {
         exception = [[SentryException alloc]
             initWithValue:[NSString stringWithFormat:@"Exception %@, Code %@, Subcode %@",
-                                    self.exceptionContext[@"mach"][@"exception"],
-                                    self.exceptionContext[@"mach"][@"code"],
-                                    self.exceptionContext[@"mach"][@"subcode"]]
+                              self.exceptionContext[@"mach"][@"exception"],
+                              self.exceptionContext[@"mach"][@"code"],
+                              self.exceptionContext[@"mach"][@"subcode"]]
                      type:self.exceptionContext[@"mach"][@"exception_name"]];
     } else if ([exceptionType isEqualToString:@"signal"]) {
-        exception = [[SentryException alloc]
-            initWithValue:[NSString stringWithFormat:@"Signal %@, Code %@",
-                                    self.exceptionContext[@"signal"][@"signal"],
-                                    self.exceptionContext[@"signal"][@"code"]]
-                     type:self.exceptionContext[@"signal"][@"name"]];
+        exception =
+            [[SentryException alloc] initWithValue:[NSString stringWithFormat:@"Signal %@, Code %@",
+                                                       self.exceptionContext[@"signal"][@"signal"],
+                                                       self.exceptionContext[@"signal"][@"code"]]
+                                              type:self.exceptionContext[@"signal"][@"name"]];
     } else if ([exceptionType isEqualToString:@"user"]) {
         NSString *exceptionReason =
             [NSString stringWithFormat:@"%@", self.exceptionContext[@"reason"]];
@@ -451,9 +472,8 @@ SentryCrashReportConverter ()
         }
     }
     if (reasons.count > 0) {
-        exception.value =
-            [[[reasons array] sortedArrayUsingSelector:@selector(localizedCaseInsensitiveCompare:)]
-                componentsJoinedByString:@" > "];
+        exception.value = [[[reasons array] sortedArrayUsingSelector:@selector
+            (localizedCaseInsensitiveCompare:)] componentsJoinedByString:@" > "];
     }
 }
 

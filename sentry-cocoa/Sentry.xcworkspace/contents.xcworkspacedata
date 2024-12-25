@@ -5,6 +5,9 @@
       location = "container:"
       name = "Samples">
       <FileRef
+         location = "group:Samples/Shared">
+      </FileRef>
+      <FileRef
          location = "group:Samples/README.md">
       </FileRef>
       <FileRef
@@ -18,6 +21,9 @@
       </FileRef>
       <FileRef
          location = "group:Samples/tvOS-Swift/tvOS-Swift.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:Samples/macOS-SwiftUI/macOS-SwiftUI.xcodeproj">
       </FileRef>
       <FileRef
          location = "group:Samples/macOS-Swift/macOS-Swift.xcodeproj">
@@ -35,4 +41,11 @@
    <FileRef
       location = "group:Sentry.xcodeproj">
    </FileRef>
+   <Group
+      location = "container:"
+      name = "TestSamples">
+      <FileRef
+         location = "group:TestSamples/SwiftUITestSample/SwiftUITestSample.xcodeproj">
+      </FileRef>
+   </Group>
 </Workspace>

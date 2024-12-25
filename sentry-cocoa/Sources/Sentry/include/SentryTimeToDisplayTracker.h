@@ -29,11 +29,13 @@ SENTRY_NO_INIT
                waitForFullDisplay:(BOOL)waitForFullDisplay
              dispatchQueueWrapper:(SentryDispatchQueueWrapper *)dispatchQueueWrapper;
 
-- (void)startForTracer:(SentryTracer *)tracer;
+- (BOOL)startForTracer:(SentryTracer *)tracer;
 
 - (void)reportInitialDisplay;
 
 - (void)reportFullyDisplayed;
+
+- (void)finishSpansIfNotFinished;
 
 @end
 

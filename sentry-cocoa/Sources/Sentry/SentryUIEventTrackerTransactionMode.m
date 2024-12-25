@@ -16,8 +16,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface
-SentryUIEventTrackerTransactionMode ()
+@interface SentryUIEventTrackerTransactionMode ()
 
 @property (nonatomic, assign) NSTimeInterval idleTimeout;
 @property (nullable, nonatomic, strong) NSMutableArray<SentryTracer *> *activeTransactions;
@@ -37,7 +36,7 @@ SentryUIEventTrackerTransactionMode ()
 
 - (void)handleUIEvent:(NSString *)action
                   operation:(NSString *)operation
-    accessibilityIdentifier:(NSString *)accessibilityIdentifier
+    accessibilityIdentifier:(nullable NSString *)accessibilityIdentifier
 {
 
     // There might be more active transactions stored, but only the last one might still be

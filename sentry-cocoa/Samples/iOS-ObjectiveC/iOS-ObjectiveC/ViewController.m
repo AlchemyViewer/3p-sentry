@@ -1,9 +1,9 @@
 #import "ViewController.h"
+#import "NoARCCrash.h"
 
 @import Sentry;
 
-@interface
-ViewController ()
+@interface ViewController ()
 
 @end
 
@@ -122,6 +122,11 @@ ViewController ()
 - (IBAction)crash:(id)sender
 {
     [SentrySDK crash];
+}
+
+- (IBAction)sigsevCrash:(id)sender
+{
+    callMessageOnDeallocatedObject();
 }
 
 - (IBAction)oomCrash:(id)sender

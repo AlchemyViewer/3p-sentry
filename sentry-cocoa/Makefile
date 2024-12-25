@@ -1,16 +1,21 @@
 .PHONY: init
-init: setup-git
+init:
 	which brew || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 	brew bundle
+	pre-commit install
+	clang-format --version | awk '{print $3}' > scripts/.clang-format-version
+	swiftlint version > scripts/.swiftlint-version
+	
+# installs the tools needed to test various CI tasks locally
+init-ci: init
+	brew bundle --file Brewfile-ci
 	rbenv install --skip-existing
 	rbenv exec gem update bundler
 	rbenv exec bundle install
 
-.PHONY: setup-git
-setup-git:
-ifneq (, $(shell which pre-commit))
-	pre-commit install
-endif
+.PHONY: check-versions
+check-versions:
+	./scripts/check-tooling-versions.sh
 
 lint:
 	@echo "--> Running Swiftlint and Clang-Format"
@@ -51,6 +56,9 @@ test-alamofire:
 test-homekit:
 	./scripts/test-homekit.sh
 
+test-ui-critical:
+	./scripts/test-ui-critical.sh
+
 analyze:
 	rm -rf analyzer
 	xcodebuild analyze -workspace Sentry.xcworkspace -scheme Sentry -configuration Release CLANG_ANALYZER_OUTPUT=html CLANG_ANALYZER_OUTPUT_DIR=analyzer -destination "platform=iOS Simulator,OS=latest,name=iPhone 11"  CODE_SIGNING_ALLOWED="NO" | xcpretty -t && [[ -z `find analyzer -name "*.html"` ]]
@@ -65,22 +73,12 @@ build-xcframework:
 	ditto -c -k -X --rsrc --keepParent Carthage/Sentry.xcframework Carthage/Sentry.xcframework.zip
 	ditto -c -k -X --rsrc --keepParent Carthage/Sentry-Dynamic.xcframework Carthage/Sentry-Dynamic.xcframework.zip
 	ditto -c -k -X --rsrc --keepParent Carthage/SentrySwiftUI.xcframework Carthage/SentrySwiftUI.xcframework.zip
-	ditto -c -k -X --rsrc --keepParent Carthage/Sentry-WihoutUIKitOrAppKit.xcframework Carthage/Sentry-WihoutUIKitOrAppKit.zip
+	ditto -c -k -X --rsrc --keepParent Carthage/Sentry-WithoutUIKitOrAppKit.xcframework Carthage/Sentry-WithoutUIKitOrAppKit.zip
 
 build-xcframework-sample:
 	./scripts/create-carthage-json.sh
 	cd Samples/Carthage-Validation/XCFramework/ && carthage update --use-xcframeworks
 	xcodebuild -project "Samples/Carthage-Validation/XCFramework/XCFramework.xcodeproj" -configuration Release CODE_SIGNING_ALLOWED="NO" build
-
-## Build Sentry as a XCFramework that can be used with watchOS and save it to
-## the watchOS sample.
-watchOSLibPath = ./Samples/watchOS-Swift/libs
-build-for-watchos:
-	@echo "--> Building Sentry as a XCFramework that can be used with watchOS"
-	rm -rf ${watchOSLibPath}
-	xcodebuild archive -scheme Sentry -destination="watchOS" -archivePath ${watchOSLibPath}/watchos.xcarchive -sdk watchos SKIP_INSTALL=NO BUILD_LIBRARY_FOR_DISTRIBUTION=YES
-	xcodebuild archive -scheme Sentry -destination="watch Simulator" -archivePath ${watchOSLibPath}//watchsimulator.xcarchive -sdk watchsimulator SKIP_INSTALL=NO BUILD_LIBRARY_FOR_DISTRIBUTION=YES
-	xcodebuild -create-xcframework -allow-internal-distribution -framework ${watchOSLibPath}/watchos.xcarchive/Products/Library/Frameworks/Sentry.framework -framework ${watchOSLibPath}/watchsimulator.xcarchive/Products/Library/Frameworks/Sentry.framework -output ${watchOSLibPath}//Sentry.xcframework
 
 # call this like `make bump-version TO=5.0.0-rc.0`
 bump-version: clean-version-bump

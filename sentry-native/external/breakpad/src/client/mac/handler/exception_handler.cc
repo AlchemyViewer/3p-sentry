@@ -343,8 +343,13 @@ bool ExceptionHandler::WriteMinidumpForChild(mach_port_t child,
   bool result = generator.Write(dump_filename.c_str());
 
   if (callback) {
+#ifdef SENTRY_BACKEND_BREAKPAD
+    return callback(dump_path.c_str(), dump_id.c_str(),
+                    callback_context, nullptr, result);
+#else
     return callback(dump_path.c_str(), dump_id.c_str(),
                     callback_context, result);
+#endif
   }
   return result;
 }
@@ -393,6 +398,11 @@ bool ExceptionHandler::WriteMinidumpWithException(
   } else {
     string minidump_id;
 
+    std::remove_pointer<mcontext_t>::type mctx = {};
+    breakpad_ucontext_t uctx = {};
+    uctx.uc_mcsize = sizeof(mctx);
+    uctx.uc_mcontext = &mctx;
+
     // Putting the MinidumpGenerator in its own context will ensure that the
     // destructor is executed, closing the newly created minidump file.
     if (!dump_path_.empty()) {
@@ -400,6 +410,7 @@ bool ExceptionHandler::WriteMinidumpWithException(
                            report_current_thread ? MACH_PORT_NULL :
                                                    mach_thread_self());
       md.SetTaskContext(task_context);
+
       if (exception_type && exception_code) {
         // If this is a real exception, give the filter (if any) a chance to
         // decide if this should be sent.
@@ -410,6 +421,13 @@ bool ExceptionHandler::WriteMinidumpWithException(
                                    exception_subcode, thread_name);
       }
 
+      // fill context
+      if (!task_context)
+      {
+        md.GetThreadContext(thread_name, &uctx);
+        task_context = &uctx;
+      }
+
       result = md.Write(next_minidump_path_c_);
     }
 
@@ -418,8 +436,12 @@ bool ExceptionHandler::WriteMinidumpWithException(
       // If the user callback returned true and we're handling an exception
       // (rather than just writing out the file), then we should exit without
       // forwarding the exception to the next handler.
-      if (callback_(dump_path_c_, next_minidump_id_c_, callback_context_,
+#ifdef SENTRY_BACKEND_BREAKPAD
+      if (callback_(dump_path_c_, next_minidump_id_c_, callback_context_, task_context,
                     result)) {
+#else
+      if (callback_(dump_path_c_, next_minidump_id_c_, callback_context_, result)) {
+#endif
         if (exit_after_write)
           _exit(exception_type);
       }

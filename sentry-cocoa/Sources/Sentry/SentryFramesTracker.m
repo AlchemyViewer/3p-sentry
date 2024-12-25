@@ -28,11 +28,12 @@ typedef NSMutableArray<NSDictionary<NSString *, NSNumber *> *> SentryMutableFram
 static CFTimeInterval const SentryFrozenFrameThreshold = 0.7;
 static CFTimeInterval const SentryPreviousFrameInitialValue = -1;
 
-@interface
-SentryFramesTracker ()
+@interface SentryFramesTracker ()
+
+@property (nonatomic, assign, readonly) BOOL isStarted;
 
 @property (nonatomic, strong, readonly) SentryDisplayLinkWrapper *displayLinkWrapper;
-@property (nonatomic, strong, readonly) SentryCurrentDateProvider *dateProvider;
+@property (nonatomic, strong, readonly) id<SentryCurrentDateProvider> dateProvider;
 @property (nonatomic, strong, readonly) SentryDispatchQueueWrapper *dispatchQueueWrapper;
 @property (nonatomic, strong) SentryNSNotificationCenterWrapper *notificationCenter;
 @property (nonatomic, assign) CFTimeInterval previousFrameTimestamp;
@@ -64,13 +65,14 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
 }
 
 - (instancetype)initWithDisplayLinkWrapper:(SentryDisplayLinkWrapper *)displayLinkWrapper
-                              dateProvider:(SentryCurrentDateProvider *)dateProvider
+                              dateProvider:(id<SentryCurrentDateProvider>)dateProvider
                       dispatchQueueWrapper:(SentryDispatchQueueWrapper *)dispatchQueueWrapper
                         notificationCenter:(SentryNSNotificationCenterWrapper *)notificationCenter
                  keepDelayedFramesDuration:(CFTimeInterval)keepDelayedFramesDuration
 {
     if (self = [super init]) {
         _isRunning = NO;
+        _isStarted = NO;
         _displayLinkWrapper = displayLinkWrapper;
         _dateProvider = dateProvider;
         _dispatchQueueWrapper = dispatchQueueWrapper;
@@ -93,19 +95,6 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
 {
     _displayLinkWrapper = displayLinkWrapper;
 }
-- (void)setPreviousFrameSystemTimestamp:(uint64_t)previousFrameSystemTimestamp
-    SENTRY_DISABLE_THREAD_SANITIZER("As you can only disable the thread sanitizer for methods, we "
-                                    "must manually create the setter here.")
-{
-    _previousFrameSystemTimestamp = previousFrameSystemTimestamp;
-}
-
-- (uint64_t)getPreviousFrameSystemTimestamp SENTRY_DISABLE_THREAD_SANITIZER(
-    "As you can only disable the thread sanitizer for methods, we must manually create the getter "
-    "here.")
-{
-    return _previousFrameSystemTimestamp;
-}
 
 - (void)resetFrames
 {
@@ -126,11 +115,13 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
 {
     // The DisplayLink callback always runs on the main thread. We dispatch this to the main thread
     // instead to avoid using locks in the DisplayLink callback.
-    [self.dispatchQueueWrapper dispatchOnMainQueue:^{ [self resetProfilingTimestampsInternal]; }];
+    [self.dispatchQueueWrapper
+        dispatchAsyncOnMainQueue:^{ [self resetProfilingTimestampsInternal]; }];
 }
 
 - (void)resetProfilingTimestampsInternal
 {
+    SENTRY_LOG_DEBUG(@"Resetting profiling GPU timeseries data.");
     self.frozenFrameTimestamps = [SentryMutableFrameInfoTimeSeries array];
     self.slowFrameTimestamps = [SentryMutableFrameInfoTimeSeries array];
     self.frameRateTimestamps = [SentryMutableFrameInfoTimeSeries array];
@@ -140,6 +131,12 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
 
 - (void)start
 {
+    if (_isStarted) {
+        return;
+    }
+
+    _isStarted = YES;
+
     [self.notificationCenter
         addObserver:self
            selector:@selector(didBecomeActive)
@@ -182,6 +179,7 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
     if (self.previousFrameTimestamp == SentryPreviousFrameInitialValue) {
         self.previousFrameTimestamp = thisFrameTimestamp;
         self.previousFrameSystemTimestamp = thisFrameSystemTimestamp;
+        [self.delayedFramesTracker setPreviousFrameSystemTimestamp:thisFrameSystemTimestamp];
         [self reportNewFrame];
         return;
     }
@@ -243,8 +241,11 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
 
     if (frameDuration > slowFrameThreshold(_currentFrameRate)) {
         [self.delayedFramesTracker recordDelayedFrame:self.previousFrameSystemTimestamp
+                             thisFrameSystemTimestamp:thisFrameSystemTimestamp
                                      expectedDuration:slowFrameThreshold(_currentFrameRate)
                                        actualDuration:frameDuration];
+    } else {
+        [self.delayedFramesTracker setPreviousFrameSystemTimestamp:thisFrameSystemTimestamp];
     }
 
     _totalFrames++;
@@ -255,14 +256,11 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
 
 - (void)reportNewFrame
 {
-    NSArray *localListeners;
-    @synchronized(self.listeners) {
-        localListeners = [self.listeners allObjects];
-    }
-
     NSDate *newFrameDate = [self.dateProvider date];
-
-    for (id<SentryFramesTrackerListener> listener in localListeners) {
+    // We need to copy the list because some listeners will remove themselves
+    // from the list during the callback, causing a crash during iteration.
+    NSArray<id<SentryFramesTrackerListener>> *listeners = [self.listeners copy];
+    for (id<SentryFramesTrackerListener> listener in listeners) {
         [listener framesTrackerHasNewFrame:newFrameDate];
     }
 }
@@ -297,29 +295,27 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
 #    endif // SENTRY_TARGET_PROFILING_SUPPORTED
 }
 
-- (CFTimeInterval)getFramesDelay:(uint64_t)startSystemTimestamp
-              endSystemTimestamp:(uint64_t)endSystemTimestamp SENTRY_DISABLE_THREAD_SANITIZER()
+- (SentryFramesDelayResult *)getFramesDelay:(uint64_t)startSystemTimestamp
+                         endSystemTimestamp:(uint64_t)endSystemTimestamp
+    SENTRY_DISABLE_THREAD_SANITIZER()
 {
     return [self.delayedFramesTracker getFramesDelay:startSystemTimestamp
                                   endSystemTimestamp:endSystemTimestamp
                                            isRunning:_isRunning
-                        previousFrameSystemTimestamp:self.previousFrameSystemTimestamp
                                   slowFrameThreshold:slowFrameThreshold(_currentFrameRate)];
 }
 
 - (void)addListener:(id<SentryFramesTrackerListener>)listener
 {
-
-    @synchronized(self.listeners) {
-        [self.listeners addObject:listener];
-    }
+    // Adding listeners on the main thread to avoid race condition with new frame callback
+    [self.dispatchQueueWrapper dispatchAsyncOnMainQueue:^{ [self.listeners addObject:listener]; }];
 }
 
 - (void)removeListener:(id<SentryFramesTrackerListener>)listener
 {
-    @synchronized(self.listeners) {
-        [self.listeners removeObject:listener];
-    }
+    // Removing listeners on the main thread to avoid race condition with new frame callback
+    [self.dispatchQueueWrapper
+        dispatchAsyncOnMainQueue:^{ [self.listeners removeObject:listener]; }];
 }
 
 - (void)pause
@@ -330,6 +326,12 @@ slowFrameThreshold(uint64_t actualFramesPerSecond)
 
 - (void)stop
 {
+    if (!_isStarted) {
+        return;
+    }
+
+    _isStarted = NO;
+
     [self pause];
     [self.delayedFramesTracker resetDelayedFramesTimeStamps];
 

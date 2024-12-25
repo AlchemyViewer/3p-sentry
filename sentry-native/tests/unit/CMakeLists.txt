@@ -13,6 +13,8 @@ sentry_get_property(INCLUDE_DIRECTORIES)
 sentry_get_property(LINK_LIBRARIES)
 sentry_get_property(INTERFACE_LINK_LIBRARIES)
 
+list(FILTER SENTRY_SOURCES EXCLUDE REGEX "\\.rc$")
+
 add_executable(sentry_test_unit
 	${SENTRY_SOURCES}
 	main.c
@@ -29,6 +31,7 @@ add_executable(sentry_test_unit
 	test_modulefinder.c
 	test_mpack.c
 	test_options.c
+	test_os_release.c
 	test_path.c
 	test_ratelimiter.c
 	test_sampling.c

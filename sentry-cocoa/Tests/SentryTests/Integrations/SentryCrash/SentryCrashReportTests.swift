@@ -1,4 +1,3 @@
-import Nimble
 import SentryTestUtils
 import XCTest
 
@@ -66,6 +65,21 @@ class SentryCrashReportTests: XCTestCase {
         }
     }
     
+    func testWriteTraceContext_EndsUpInSDKScope() throws {
+        let scope = fixture.scope
+        scope.span = nil
+        
+        serializeToCrashReport(scope: scope)
+        writeCrashReport()
+        
+        let crashReportContents = try XCTUnwrap(FileManager.default.contents(atPath: fixture.reportPath))
+        
+        let crashReport: CrashReport = try JSONDecoder().decode(CrashReport.self, from: crashReportContents)
+        
+        XCTAssertEqual(scope.propagationContext.traceId.sentryIdString, crashReport.sentry_sdk_scope?.traceContext?["trace_id"])
+        XCTAssertEqual(scope.propagationContext.spanId.sentrySpanIdString, crashReport.sentry_sdk_scope?.traceContext?["span_id"])
+    }
+    
     func testShouldWriteReason_WhenWritingNSException() throws {
         var monitorContext = SentryCrash_MonitorContext()
         
@@ -83,9 +97,9 @@ class SentryCrashReportTests: XCTestCase {
 
         let crashReport: CrashReport = try XCTUnwrap( JSONDecoder().decode(CrashReport.self, from: crashReportContents))
             
-        expect(crashReport.crash.error.type) == "nsexception"
-        expect(crashReport.crash.error.reason) == reason
-        expect(crashReport.crash.error.nsexception?.reason) == reason
+        XCTAssertEqual(crashReport.crash.error.type, "nsexception")
+        XCTAssertEqual(crashReport.crash.error.reason, reason)
+        XCTAssertEqual(crashReport.crash.error.nsexception?.reason, reason)
     }
     
     func testShouldNotWriteReason_WhenWritingNSException() {
@@ -100,9 +114,9 @@ class SentryCrashReportTests: XCTestCase {
         do {
             let crashReport: CrashReport = try JSONDecoder().decode(CrashReport.self, from: crashReportContents)
             
-            expect(crashReport.crash.error.type) == "nsexception"
-            expect(crashReport.crash.error.reason) == nil
-            expect(crashReport.crash.error.nsexception?.reason) == nil
+            XCTAssertEqual(crashReport.crash.error.type, "nsexception")
+            XCTAssertNil(crashReport.crash.error.reason)
+            XCTAssertNil(crashReport.crash.error.nsexception?.reason)
         } catch {
             XCTFail("Couldn't decode crash report: \(error)")
         }
@@ -113,18 +127,55 @@ class SentryCrashReportTests: XCTestCase {
         
         let crashReportContents = FileManager.default.contents(atPath: fixture.reportPath) ?? Data()
         
-        let crashReportContentsAsString = String(data: crashReportContents, encoding: .ascii)
+        let crashReportContentsAsString = try XCTUnwrap(String(data: crashReportContents, encoding: .ascii))
         
-        expect(crashReportContentsAsString).toNot(contain("boot_time"), description: "The crash report must not contain boot_time because Apple forbids sending this information off device see: https://developer.apple.com/documentation/bundleresources/privacy_manifest_files/describing_use_of_required_reason_api#4278394.")
+        XCTAssertFalse(crashReportContentsAsString.contains("boot_time"), "The crash report must not contain boot_time because Apple forbids sending this information off device see: https://developer.apple.com/documentation/bundleresources/privacy_manifest_files/describing_use_of_required_reason_api#4278394.")
     }
     
-    private func writeCrashReport() {
+    func testCrashReportContainsMachInfo() throws {
+        serializeToCrashReport(scope: fixture.scope)
+        
         var monitorContext = SentryCrash_MonitorContext()
+        monitorContext.mach.type = EXC_BAD_ACCESS
+        monitorContext.mach.code = 1
+        monitorContext.mach.subcode = 12
+        
+        writeCrashReport(monitorContext: monitorContext)
+        
+        let crashReportContents = try XCTUnwrap( FileManager.default.contents(atPath: fixture.reportPath))
+        
+        let crashReport: CrashReport = try JSONDecoder().decode(CrashReport.self, from: crashReportContents)
+        
+        let mach = try XCTUnwrap(crashReport.crash.error.mach)
+        XCTAssertEqual(1, mach.exception)
+        XCTAssertEqual("EXC_BAD_ACCESS", mach.exception_name)
+        XCTAssertEqual(1, mach.code)
+        XCTAssertEqual("KERN_INVALID_ADDRESS", mach.code_name)
+        XCTAssertEqual(12, mach.subcode)
+    }
+    
+    func testCrashReportContainsStandardMachInfo_WhenMachInfoIsEmpty() throws {
+        serializeToCrashReport(scope: fixture.scope)
+        writeCrashReport()
+        
+        let crashReportContents = try XCTUnwrap( FileManager.default.contents(atPath: fixture.reportPath))
+        
+        let crashReport: CrashReport = try JSONDecoder().decode(CrashReport.self, from: crashReportContents)
+        
+        let mach = try XCTUnwrap(crashReport.crash.error.mach)
+        XCTAssertEqual(0, mach.exception)
+        XCTAssertNil(mach.exception_name)
+        XCTAssertEqual(0, mach.code)
+        XCTAssertNil(mach.code_name)
+        XCTAssertEqual(0, mach.subcode)
+    }
+    
+    private func writeCrashReport(monitorContext: SentryCrash_MonitorContext? = nil) {
+        var localMonitorContext = monitorContext ?? SentryCrash_MonitorContext()
         
         let api = sentrycrashcm_system_getAPI()
-        api?.pointee.addContextualInfoToEvent(&monitorContext)
-        
-        sentrycrashreport_writeStandardReport(&monitorContext, fixture.reportPath)
+        api?.pointee.addContextualInfoToEvent(&localMonitorContext)
+        sentrycrashreport_writeStandardReport(&localMonitorContext, fixture.reportPath)
     }
     
     /**
@@ -155,8 +206,8 @@ class SentryCrashReportTests: XCTestCase {
     // We parse JSON so it's fine to disable identifier_name
     // swiftlint:disable identifier_name
     struct CrashReport: Decodable {
-        let user: CrashReportUserInfo
-        let sentry_sdk_scope: CrashReportUserInfo
+        let user: CrashReportUserInfo?
+        let sentry_sdk_scope: CrashReportUserInfo?
         let crash: Crash
     }
     
@@ -168,6 +219,7 @@ class SentryCrashReportTests: XCTestCase {
         let type: String?
         let reason: String?
         let nsexception: NSException?
+        let mach: Mach?
     }
     
     struct NSException: Decodable, Equatable {
@@ -175,11 +227,20 @@ class SentryCrashReportTests: XCTestCase {
         let userInfo: String?
         let reason: String?
     }
+    
+    struct Mach: Decodable, Equatable {
+        let exception: Int?
+        let exception_name: String?
+        let code: Int?
+        let code_name: String?
+        let subcode: Int?
+    }
 
     struct CrashReportUserInfo: Decodable, Equatable {
         let user: CrashReportUser?
         let dist: String?
         let context: [String: [String: String]]?
+        let traceContext: [String: String]?
         let environment: String?
         let tags: [String: String]?
         let extra: [String: String]?
@@ -187,7 +248,7 @@ class SentryCrashReportTests: XCTestCase {
         let level: String?
         let breadcrumbs: [CrashReportCrumb]?
     }
-
+    
     struct CrashReportUser: Decodable, Equatable {
         let id: String
         let email: String
