@@ -1,4 +1,0 @@
-module SentryInternal {
-    header "SentrySwiftUI.h"
-}
-

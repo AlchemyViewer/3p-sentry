@@ -28,7 +28,7 @@ source_environment_tempfile="$stage/source_environment.sh"
 "$autobuild" source_environment > "$source_environment_tempfile"
 . "$source_environment_tempfile"
 
-version="8.42.1-0.7.17"
+version="8.55.1-0.7.17"
 echo "${version}" > "${stage}/VERSION.txt"
 
 case "$AUTOBUILD_PLATFORM" in
@@ -77,7 +77,7 @@ case "$AUTOBUILD_PLATFORM" in
             popd
             cp -a Carthage/Build/Mac/* $stage/lib/release/
         popd
-    ;;            
+    ;;
 
     # -------------------------- linux, linux64 --------------------------
     linux*)
