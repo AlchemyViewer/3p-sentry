@@ -1,0 +1,6 @@
+[submodule "sentry-cocoa"]
+	path = sentry-cocoa
+	url = https://github.com/getsentry/sentry-cocoa.git
+[submodule "sentry-native"]
+	path = sentry-native
+	url = https://github.com/getsentry/sentry-native.git
